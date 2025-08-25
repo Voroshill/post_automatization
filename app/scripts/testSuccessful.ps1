@@ -1,0 +1,97 @@
+param (
+    [string]$pager,
+    [string]$testType
+)
+
+function Update-ADUserAttributes {
+    param (
+        [string]$pager,
+        [string]$testType
+    )
+
+    Write-Host "Searching for user with pager ID $pager in AD..."
+
+    $user = Get-ADUser -Filter "pager -eq '$pager'" -Properties pager, extensionAttribute1, extensionAttribute2
+
+    if ($user) {
+        $sAMAccountName = $user.sAMAccountName
+        Write-Host "User found: $sAMAccountName"
+
+        $attributeToUpdate = switch -Wildcard ($testType) {
+            "*anykey*" { "extensionAttribute1" }
+            "*sysadmin*" { "extensionAttribute2" }
+            "*facekit*" { "extensionAttribute1" }
+            default {
+                Write-Host "Unknown test type, cannot determine attribute to update."
+                return
+            }
+        }
+
+        try {
+            Set-ADUser -Identity $sAMAccountName -Replace @{ $attributeToUpdate = $true }
+            Write-Host "$attributeToUpdate for user $sAMAccountName has been set to true successfully."
+        } catch {
+            Write-Host "An error occurred while updating the attribute: $($_.Exception.Message)"
+        }
+    } else {
+        Write-Host "No user found with pager ID $pager."
+    }
+}
+
+Update-ADUserAttributes -pager $pager -testType $testType
+
+# SIG # Begin signature block
+# MIIJ3gYJKoZIhvcNAQcCoIIJzzCCCcsCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
+# gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUwqzPw8xPmvA1X7mq/UZWhbqd
+# mYugggcxMIIHLTCCBhWgAwIBAgITLwAAAAytuJFAeUaCCwAAAAAADDANBgkqhkiG
+# 9w0BAQsFADBfMRMwEQYKCZImiZPyLGQBGRYDY29tMRYwFAYKCZImiZPyLGQBGRYG
+# c3QtaW5nMRcwFQYKCZImiZPyLGQBGRYHY2VudHJhbDEXMBUGA1UEAxMOY2VudHJh
+# bC1QREMtQ0EwHhcNMjMxMjEyMDc0MDMxWhcNMjQxMjExMDc0MDMxWjCCATkxEzAR
+# BgoJkiaJk/IsZAEZFgNjb20xFjAUBgoJkiaJk/IsZAEZFgZzdC1pbmcxFzAVBgoJ
+# kiaJk/IsZAEZFgdjZW50cmFsMTEwLwYDVQQLDCjQodGC0YDQvtC50KLQtdGF0L3Q
+# vtCY0L3QttC10L3QtdGA0LjQvdCzMTYwNAYDVQQLDC3QlNC10L/QsNGA0YLQsNC8
+# 0LXQvdGCINC+0LHQtdGB0L/QtdGH0LXQvdC40Y8xRTBDBgNVBAsMPNCe0YLQtNC1
+# 0Lsg0LjQvdGE0L7RgNC80LDRhtC40L7QvdC90YvRhSDRgtC10YXQvdC+0LvQvtCz
+# 0LjQuTE/MD0GA1UEAww20JDQvdC00YDQtdC5INCS0LvQsNC00LjQvNC40YDQvtCy
+# 0LjRhyDQmtCw0LTRh9C10L3QutC+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB
+# CgKCAQEAr4MgeV6osA6sSo8W9kVjz3bzypZYXnAUlgLit9ae6U0oQ+z9QDHJjzAJ
+# 0Z+lWGX+cYtNdqV9tMroXsOLHCg0SUAYOwgRY+fSLLL6MIp/UWpS20DkNCE0096q
+# SfFhvJky/HZl1+vXukNA5/Qr98HV45cy4dx7H5Hig9di5fx/3O3Oem+LqkIK2Kq6
+# 5HSfTiybZDX2y9D9c738/ujSqxGNtYpWpTfHRdmK7LMcN6vY3cMWwlo4aoiSXr3Q
+# n5wMP2Cj5Ko7HvGgchDhfdfKdBiV1Ymq+ZFETPqSmv+WTxMg35rvSX88MCuNem4S
+# MnlNffqZspBfHi42Nmcyj9U/3FmfkQIDAQABo4IDBDCCAwAwJQYJKwYBBAGCNxQC
+# BBgeFgBDAG8AZABlAFMAaQBnAG4AaQBuAGcwEwYDVR0lBAwwCgYIKwYBBQUHAwMw
+# DgYDVR0PAQH/BAQDAgeAMB0GA1UdDgQWBBRES4DLaxtNsRGqn/acUz6zYiiO2TAf
+# BgNVHSMEGDAWgBS1IN9kKE0hFBe7vkN0JiZYgd8zwjCCARIGA1UdHwSCAQkwggEF
+# MIIBAaCB/qCB+4aBu2xkYXA6Ly8vQ049Y2VudHJhbC1QREMtQ0EsQ049UERDLENO
+# PUNEUCxDTj1QdWJsaWMlMjBLZXklMjBTZXJ2aWNlcyxDTj1TZXJ2aWNlcyxDTj1D
+# b25maWd1cmF0aW9uLERDPWNlbnRyYWwsREM9c3QtaW5nLERDPWNvbT9jZXJ0aWZp
+# Y2F0ZVJldm9jYXRpb25MaXN0P2Jhc2U/b2JqZWN0Q2xhc3M9Y1JMRGlzdHJpYnV0
+# aW9uUG9pbnSGO2h0dHA6Ly9QREMuY2VudHJhbC5zdC1pbmcuY29tL0NlcnRFbnJv
+# bGwvY2VudHJhbC1QREMtQ0EuY3JsMIHKBggrBgEFBQcBAQSBvTCBujCBtwYIKwYB
+# BQUHMAKGgapsZGFwOi8vL0NOPWNlbnRyYWwtUERDLUNBLENOPUFJQSxDTj1QdWJs
+# aWMlMjBLZXklMjBTZXJ2aWNlcyxDTj1TZXJ2aWNlcyxDTj1Db25maWd1cmF0aW9u
+# LERDPWNlbnRyYWwsREM9c3QtaW5nLERDPWNvbT9jQUNlcnRpZmljYXRlP2Jhc2U/
+# b2JqZWN0Q2xhc3M9Y2VydGlmaWNhdGlvbkF1dGhvcml0eTA+BgNVHREENzA1oDMG
+# CisGAQQBgjcUAgOgJQwjYW5kcmVpLmthZGNoZW5rb0BjZW50cmFsLnN0LWluZy5j
+# b20wTwYJKwYBBAGCNxkCBEIwQKA+BgorBgEEAYI3GQIBoDAELlMtMS01LTIxLTQx
+# NzA1Njg3MzYtMjMwMzU1MzEyOC0xMjc4OTUwMTI4LTE0NDYwDQYJKoZIhvcNAQEL
+# BQADggEBAHRjtnczX1BnxfaeDgCIWz9tC++/Zwou/kJjEdO9+/281KFrrYOVLiEb
+# NyoJpzcxScjiQzrxDmtzALOQYGtfFahmAw2YP5+Fztvu6aDWWvBPasUPQwGsu2nj
+# ZFjrZyVbmD17X2eWTggJ+7kOnJJF5V/ex0uPoHP0LD4DriLSHxwJ/OfXVrTy4ass
+# UJYJwEKgRFEJ3dJEdBKFKD91HJblFkImsAPxBKIPnrqGLFWzfWqUwy1DtKIpg6da
+# YFMfzZWTxxc2hz55RBcvIzGC+xHAWsUnnVnk1jYENGBBqIU5GVW21cnzLPznpbpe
+# d/NTGELXFCY20HNiwr9BpGBoTcLYA0ExggIXMIICEwIBATB2MF8xEzARBgoJkiaJ
+# k/IsZAEZFgNjb20xFjAUBgoJkiaJk/IsZAEZFgZzdC1pbmcxFzAVBgoJkiaJk/Is
+# ZAEZFgdjZW50cmFsMRcwFQYDVQQDEw5jZW50cmFsLVBEQy1DQQITLwAAAAytuJFA
+# eUaCCwAAAAAADDAJBgUrDgMCGgUAoHgwGAYKKwYBBAGCNwIBDDEKMAigAoAAoQKA
+# ADAZBgkqhkiG9w0BCQMxDAYKKwYBBAGCNwIBBDAcBgorBgEEAYI3AgELMQ4wDAYK
+# KwYBBAGCNwIBFTAjBgkqhkiG9w0BCQQxFgQUPdBtJhNTUK698G4OhqqpoGA4+DAw
+# DQYJKoZIhvcNAQEBBQAEggEANC0djQOXETcT6dorPjZJBsNI1REeCKuqo4VHQPJZ
+# 1Lr62ZgUl5mLrFmwM6Sar021Xb3SCDy8lIUO3rLnq1zDpTij1gLltC7i8cPlgyca
+# /6uGJExmicUId9B88TOGOcf6cfp0COt6VHErTvsUlelxoSpoSuRCZoaD/xllfJXp
+# pthATf1/tK8BeCO0O+tkxzex96MCZ5vYxKfQew5CQYF85/98ZsCXzGobTu+wj7sU
+# 2T+urxIXMSABqI8KJmfiwcmC1/21a1IP+xU0WcOTYgiISwvDWL1mBqZCKgfRnVSH
+# +hhR0kKhurFwOg4oHME+h2yJDu1aYoLgMGF5Gx1+55HNfA==
+# SIG # End signature block
