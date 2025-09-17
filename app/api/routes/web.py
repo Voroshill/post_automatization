@@ -1,13 +1,11 @@
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
+from fastapi import APIRouter
+from fastapi.responses import FileResponse
 from pathlib import Path
 
 router = APIRouter(tags=["web"])
 
-templates = Jinja2Templates(directory=str(Path(__file__).parent.parent.parent / "templates"))
 
-
-@router.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
-    return templates.TemplateResponse("dashboard.html", {"request": request})
+@router.get("/", response_class=FileResponse)
+async def dashboard():
+    """Главная страница - Vue.js приложение"""
+    return FileResponse("static/index.html")

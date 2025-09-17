@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     debug: bool = False
     domain: str = "user-management.yourdomain.com"
     api_base_url: str = "https://user-management.yourdomain.com/api"
+    app_host: str = "0.0.0.0"
+    app_port: int = 8000
     
     # Настройки базы данных
     database_url: str = "sqlite:///./data/users.db"
@@ -16,6 +18,8 @@ class Settings(BaseSettings):
     # Active Directory настройки
     ad_domain: str = "central.st-ing.com"
     ad_server: str = "dc.central.st-ing.com"
+    ldap_port: int = 389
+    ldap_ssl_port: int = 636
     
     # Exchange Server настройки
     exchange_server: str = "mailzone.central.st-ing.com"
@@ -57,6 +61,16 @@ class Settings(BaseSettings):
     
     # Настройки экспорта
     export_max_records: int = 10000
+    
+    ldap_timeout: int = 30
+    winrm_timeout: int = 30
+    smtp_timeout: int = 30
+    max_retry_attempts: int = 3
+
+    data_dir: str = "./data"
+    logs_dir: str = "./logs"
+    temp_dir: str = "./temp"
+    export_dir: str = "./exports"
     
     # Настройки LDAP
     ldap_base_dn: str = "DC=central,DC=st-ing,DC=com"

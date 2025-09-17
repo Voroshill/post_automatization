@@ -4,6 +4,31 @@ from pydantic import BaseModel
 from app.domain.entities.user import UserStatus
 
 
+# =============================================================================
+# СХЕМЫ АУТЕНТИФИКАЦИИ
+# =============================================================================
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    success: bool
+    message: str
+    user: Optional[dict] = None
+
+
+class AuthConfigResponse(BaseModel):
+    auth_enabled: bool
+    login_url: str
+
+
+class AuthVerifyResponse(BaseModel):
+    authenticated: bool
+    user: Optional[dict] = None
+
+
 class UserCreateRequest(BaseModel):
     unique: str
     firstname: str

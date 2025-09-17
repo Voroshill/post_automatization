@@ -18,7 +18,7 @@ from datetime import datetime
 import io
 from app.core.config.settings import settings
 
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(tags=["users"])
 
 
 def get_user_service(db: Session = Depends(get_db)) -> UserService:

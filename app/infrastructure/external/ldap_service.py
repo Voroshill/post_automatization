@@ -134,7 +134,7 @@ class LDAPService:
             if user_data.get('technical') == 'technical':
                 ou = 'OU=Технические логины,DC=central,DC=st-ing,DC=com'
             else:
-            ou = self.find_ou(user_data.get('current_location_id', ''), user_data.get('department', ''))
+                ou = self.find_ou(user_data.get('current_location_id', ''), user_data.get('department', ''))
             
             display_name = f"{user_data.get('firstname', '')} {user_data.get('secondname', '')} {user_data.get('thirdname', '')}"
             user_dn = f"CN={display_name},{ou}"
@@ -379,16 +379,16 @@ class LDAPService:
             for entry in conn.entries:
                 display_name = entry.displayName.value if hasattr(entry, 'displayName') else ''
                 if display_name and not any(system in display_name for system in ['Служебная учетная запись', 'Microsoft', 'E4E', 'SystemMailbox', 'HealthMailbox', 'wms', 'WMS']):
-                users.append({
+                    users.append({
                         'displayName': display_name,
-                    'mail': entry.mail.value if hasattr(entry, 'mail') else '',
+                        'mail': entry.mail.value if hasattr(entry, 'mail') else '',
                         'givenName': entry.givenName.value if hasattr(entry, 'givenName') else '',
                         'physicalDeliveryOfficeName': entry.physicalDeliveryOfficeName.value if hasattr(entry, 'physicalDeliveryOfficeName') else '',
-                    'department': entry.department.value if hasattr(entry, 'department') else '',
+                        'department': entry.department.value if hasattr(entry, 'department') else '',
                         'description': entry.description.value if hasattr(entry, 'description') else '',
                         'pager': entry.pager.value if hasattr(entry, 'pager') else '',
                         'sAMAccountName': entry.sAMAccountName.value if hasattr(entry, 'sAMAccountName') else '',
-                    'company': entry.company.value if hasattr(entry, 'company') else '',
+                        'company': entry.company.value if hasattr(entry, 'company') else '',
                         'telephoneNumber': entry.telephoneNumber.value if hasattr(entry, 'telephoneNumber') else '',
                         'lastLogon': entry.lastLogon.value if hasattr(entry, 'lastLogon') else '',
                         'pwdLastSet': entry.pwdLastSet.value if hasattr(entry, 'pwdLastSet') else '',
