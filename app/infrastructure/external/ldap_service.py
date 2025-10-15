@@ -1,8 +1,8 @@
 import asyncio
 import os
 import subprocess
-from typing import Dict, Any, Optional
-from ldap3 import Server, Connection, ALL, NTLM, SUBTREE, MODIFY_REPLACE
+from typing import Dict, Any, Optional, List
+from ldap3 import Server, Connection, ALL, NTLM, SIMPLE, SUBTREE, MODIFY_REPLACE
 from app.core.config.settings import settings
 from app.core.logging.logger import ldap_logger
 
@@ -17,22 +17,54 @@ class LDAPService:
         
         ldap_logger.info(f"LDAPService инициализирован. Сервер: {self.ad_server}")
         
-        self.server = Server(self.ad_server, get_info=ALL)
+        self.server = Server(self.ad_server, get_info=ALL, connect_timeout=settings.ldap_timeout, use_ssl=False, port=389)
         self.connection = None
     
     async def _get_connection(self) -> Connection:
         """Получение подключения к AD"""
         if not self.connection or not self.connection.bound:
-            self.connection = Connection(
-                self.server,
-                user=f"{self.ad_domain}\\{self.admin_username}",
-                password=self.admin_password,
-                authentication=NTLM,
-                auto_bind=True
-            )
+            # Логируем параметры подключения
+            ldap_logger.info(f"Создание LDAP подключения:")
+            ldap_logger.info(f"  Сервер: {self.ad_server}")
+            ldap_logger.info(f"  Домен: {self.ad_domain}")
+            ldap_logger.info(f"  Пользователь: {self.admin_username}")
+            # фактический формат логина и тип аутентификации уточняются ниже (SIMPLE, UPN)
+            ldap_logger.info(f"  Формат пользователя: UPN")
+            ldap_logger.info(f"  Аутентификация: SIMPLE")
+            ldap_logger.info(f"  Timeout: {settings.ldap_timeout}")
+            ldap_logger.info(f"  SSL: False")
             
-            if not self.connection.bound:
-                raise Exception(f"Не удалось подключиться к AD: {self.connection.result}")
+            try:
+                auth_user = (
+                    self.admin_username
+                    if "@" in self.admin_username
+                    else f"{self.admin_username}@{self.ad_domain}"
+                )
+                self.connection = Connection(
+                    self.server,
+                    user=auth_user,
+                    password=self.admin_password,
+                    authentication=SIMPLE,
+                    auto_bind=True
+                )
+                
+                ldap_logger.info(f"LDAP подключение создано успешно")
+                ldap_logger.info(f"  Статус привязки: {self.connection.bound}")
+                ldap_logger.info(f"  Результат подключения: {self.connection.result}")
+                
+                if not self.connection.bound:
+                    ldap_logger.error(f"LDAP подключение не привязано!")
+                    ldap_logger.error(f"  Код ошибки: {self.connection.result.get('result', 'N/A')}")
+                    ldap_logger.error(f"  Описание: {self.connection.result.get('description', 'N/A')}")
+                    ldap_logger.error(f"  Сообщение: {self.connection.result.get('message', 'N/A')}")
+                    raise Exception(f"Не удалось подключиться к AD: {self.connection.result}")
+                else:
+                    ldap_logger.info(f"LDAP подключение успешно привязано!")
+                    
+            except Exception as e:
+                ldap_logger.error(f"Исключение при создании LDAP подключения: {str(e)}")
+                ldap_logger.error(f"  Тип исключения: {type(e).__name__}")
+                raise
         
         return self.connection
     
@@ -121,23 +153,42 @@ class LDAPService:
     async def create_user_in_ad(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
         """Создание пользователя в Active Directory через LDAP (точно как в PowerShell)"""
         try:
-            ldap_logger.info(f"Создание пользователя в AD через LDAP: {user_data.get('unique_id', 'Unknown')}")
+            ldap_logger.info(f"=== НАЧАЛО СОЗДАНИЯ ПОЛЬЗОВАТЕЛЯ В AD ===")
+            ldap_logger.info(f"ID пользователя: {user_data.get('unique_id', 'Unknown')}")
+            ldap_logger.info(f"Имя: {user_data.get('firstname', '')}")
+            ldap_logger.info(f"Фамилия: {user_data.get('secondname', '')}")
+            ldap_logger.info(f"Компания: {user_data.get('company', '')}")
+            ldap_logger.info(f"Отдел: {user_data.get('department', '')}")
             
+            ldap_logger.info(f"Получение LDAP подключения...")
             conn = await self._get_connection()
+            ldap_logger.info(f"LDAP подключение получено успешно")
             
+            # Подготовка данных пользователя
+            ldap_logger.info(f"Подготовка данных пользователя...")
             firstname_translit = self.translit(user_data.get('firstname', ''))
             secondname_translit = self.translit(user_data.get('secondname', ''))
             sam_account_name = f"{firstname_translit}.{secondname_translit}"
             
+            ldap_logger.info(f"  Транслитерация: {user_data.get('firstname', '')} -> {firstname_translit}")
+            ldap_logger.info(f"  Транслитерация: {user_data.get('secondname', '')} -> {secondname_translit}")
+            ldap_logger.info(f"  SAM Account Name: {sam_account_name}")
+            
             user_principal_name = self.get_user_principal_name(sam_account_name, user_data.get('company', ''))
+            ldap_logger.info(f"  User Principal Name: {user_principal_name}")
             
             if user_data.get('technical') == 'technical':
                 ou = 'OU=Технические логины,DC=central,DC=st-ing,DC=com'
+                ldap_logger.info(f"  Тип пользователя: Технический")
             else:
                 ou = self.find_ou(user_data.get('current_location_id', ''), user_data.get('department', ''))
+                ldap_logger.info(f"  Тип пользователя: Обычный")
+            
+            ldap_logger.info(f"  Организационная единица: {ou}")
             
             display_name = f"{user_data.get('firstname', '')} {user_data.get('secondname', '')} {user_data.get('thirdname', '')}"
             user_dn = f"CN={display_name},{ou}"
+            ldap_logger.info(f"  Distinguished Name: {user_dn}")
             
             attributes = {
                 'objectClass': ['top', 'person', 'organizationalPerson', 'user'],
@@ -155,22 +206,55 @@ class LDAPService:
                 'streetAddress': user_data.get('current_location_id', ''),
                 'physicalDeliveryOfficeName': user_data.get('current_location_id', ''),
                 'telephoneNumber': user_data.get('work_phone', ''),
-                'city': user_data.get('current_location_id', ''), 
-                'office': user_data.get('current_location_id', ''), 
-                'userAccountControl': '512' 
+                # Создаём DISABLED пользователя, затем установим пароль по LDAPS и включим
+                'userAccountControl': 514 
             }
             
-            success = conn.add(user_dn, attributes=attributes)
+            # Проверка существования по sAMAccountName
+            conn.search('DC=central,DC=st-ing,DC=com', f'(sAMAccountName={sam_account_name})', attributes=['distinguishedName'])
+            exists_dn = conn.entries[0].distinguishedName.value if conn.entries else None
+
+            # Создание пользователя в AD (если отсутствует)
+            if exists_dn:
+                ldap_logger.info(f"Пользователь уже существует: {sam_account_name} -> {exists_dn}")
+                success = True
+                user_dn = exists_dn
+            else:
+                ldap_logger.info(f"Создание пользователя в AD...")
+                ldap_logger.info(f"  DN: {user_dn}")
+                ldap_logger.info(f"  Атрибуты: {len(attributes)} атрибутов")
+                success = conn.add(user_dn, attributes=attributes)
+            ldap_logger.info(f"  Результат создания: {success}")
+            ldap_logger.info(f"  Код результата: {conn.result.get('result', 'N/A')}")
+            ldap_logger.info(f"  Описание: {conn.result.get('description', 'N/A')}")
             
             if success:
-                ldap_logger.info(f"Пользователь {sam_account_name} успешно создан в AD через LDAP")
-                
-                conn.extend.microsoft.modify_password(user_dn, settings.default_user_password)
-                
-                conn.modify(
-                    user_dn,
-                    {'pwdLastSet': [(MODIFY_REPLACE, ['0'])]} 
-                )
+                ldap_logger.info(f"✅ Пользователь {sam_account_name} успешно создан в AD через LDAP")
+                # Установка пароля по LDAPS и включение учётной записи
+                ldap_logger.info(f"Установка пароля для пользователя по LDAPS...")
+                try:
+                    secure_server = Server(self.ad_server, get_info=ALL, connect_timeout=settings.ldap_timeout, use_ssl=True, port=636)
+                    secure_conn = Connection(
+                        secure_server,
+                        user=(self.admin_username if "@" in self.admin_username else f"{self.admin_username}@{self.ad_domain}"),
+                        password=self.admin_password,
+                        authentication=SIMPLE,
+                        auto_bind=True
+                    )
+                    secure_conn.extend.microsoft.modify_password(user_dn, settings.default_user_password)
+                    ldap_logger.info(f"✅ Пароль установлен успешно (LDAPS)")
+                    # Включаем учётную запись
+                    conn.modify(
+                        user_dn,
+                        {'userAccountControl': [(MODIFY_REPLACE, ['512'])]}
+                    )
+                    # Требовать смену пароля при первом входе
+                    conn.modify(
+                        user_dn,
+                        {'pwdLastSet': [(MODIFY_REPLACE, ['0'])]}
+                    )
+                except Exception as e:
+                    ldap_logger.error(f"❌ Ошибка установки пароля/включения: {str(e)}")
                 
                 await self._add_user_to_groups(sam_account_name, user_data)
                 
@@ -185,12 +269,18 @@ class LDAPService:
                     "stdout": f"User {sam_account_name} created successfully via LDAP"
                 }
             else:
-                error_msg = f"Ошибка создания пользователя: {conn.result}"
+                error_msg = f"❌ Ошибка создания пользователя: {conn.result}"
                 ldap_logger.error(error_msg)
+                ldap_logger.error(f"  Код ошибки: {conn.result.get('result', 'N/A')}")
+                ldap_logger.error(f"  Описание: {conn.result.get('description', 'N/A')}")
+                ldap_logger.error(f"  Сообщение: {conn.result.get('message', 'N/A')}")
+                ldap_logger.error(f"  DN: {user_dn}")
                 return {"success": False, "stderr": error_msg}
                 
         except Exception as e:
-            ldap_logger.error(f"Исключение при создании пользователя через LDAP: {e}")
+            ldap_logger.error(f"❌ Исключение при создании пользователя через LDAP: {e}")
+            ldap_logger.error(f"  Тип исключения: {type(e).__name__}")
+            ldap_logger.error(f"  Детали: {str(e)}")
             return {"success": False, "stderr": str(e)}
     
     async def _add_user_to_groups(self, sam_account_name: str, user_data: Dict[str, Any]):
@@ -212,10 +302,20 @@ class LDAPService:
             
             department = user_data.get('department', '')
             if department:
-                conn.extend.microsoft.add_members_to_groups(
-                    sam_account_name, 
-                    department
-                )
+                # Ищем DN группы по имени/CN, чтобы избежать ошибки "attribute type not present"
+                grp_dn = None
+                for filt in [f'(name={department})', f'(cn={department})']:
+                    conn.search('DC=central,DC=st-ing,DC=com', filt, attributes=['distinguishedName'])
+                    if conn.entries:
+                        grp_dn = conn.entries[0].distinguishedName.value
+                        break
+                if grp_dn:
+                    conn.extend.microsoft.add_members_to_groups(
+                        sam_account_name,
+                        grp_dn
+                    )
+                else:
+                    ldap_logger.warning(f"Группа отдела не найдена: {department}")
                 
         except Exception as e:
             ldap_logger.warning(f"Ошибка добавления в группы: {e}")
@@ -858,3 +958,41 @@ class LDAPService:
         except Exception as e:
             ldap_logger.error(f"Исключение при обновлении тестовых атрибутов через LDAP: {e}")
             return {"success": False, "stderr": str(e)}
+
+    async def search_users(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Поиск пользователей в AD. Возвращает список сокращённых карточек.
+
+        Поля: cn, sAMAccountName, userPrincipalName, mail, pager, distinguishedName
+        """
+        conn = await self._get_connection()
+        safe_query = (query or "").strip()
+        if safe_query:
+            filter_expr = (
+                f"(|(cn=*{safe_query}*)(sAMAccountName=*{safe_query}*)"
+                f"(userPrincipalName=*{safe_query}*)(mail=*{safe_query}*)(pager=*{safe_query}*))"
+            )
+        else:
+            filter_expr = "(objectClass=user)"
+
+        conn.search(
+            'DC=central,DC=st-ing,DC=com',
+            filter_expr,
+            SUBTREE,
+            attributes=[
+                'cn', 'sAMAccountName', 'userPrincipalName', 'mail', 'pager', 'distinguishedName'
+            ],
+            size_limit=limit
+        )
+
+        results: List[Dict[str, Any]] = []
+        for entry in conn.entries:
+            results.append({
+                'cn': entry.cn.value if hasattr(entry, 'cn') else '',
+                'sAMAccountName': entry.sAMAccountName.value if hasattr(entry, 'sAMAccountName') else '',
+                'userPrincipalName': entry.userPrincipalName.value if hasattr(entry, 'userPrincipalName') else '',
+                'mail': entry.mail.value if hasattr(entry, 'mail') else '',
+                'pager': entry.pager.value if hasattr(entry, 'pager') else '',
+                'distinguishedName': entry.distinguishedName.value if hasattr(entry, 'distinguishedName') else ''
+            })
+
+        return results

@@ -20,7 +20,8 @@ dependencies = [
     "openpyxl>=3.1.0",
     "xlsxwriter>=3.1.0",
     "ldap3>=2.9.0",
-    "pywinrm>=0.4.3"
+    "pywinrm>=0.4.3",
+    "requests>=2.31.0"
 ]
 
 [project.optional-dependencies]

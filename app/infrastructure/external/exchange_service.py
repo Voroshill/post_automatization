@@ -30,33 +30,53 @@ class ExchangeService:
             exchange_logger.info(f"Создание почтового ящика Exchange для {sam_account_name}")
             
 
-            if '@st-ing.com' in user_principal_name:
-                mail_domain = 'st-ing.com'
-            elif '@dttermo.ru' in user_principal_name:
-                mail_domain = 'dttermo.ru'
-            else:
-                mail_domain = 'st-ing.com'
-            
+            # Если база не указана, не передаем параметр -Database (пусть решает Exchange)
+            database_arg = f" -Database \"{self.exchange_database}\"" if (self.exchange_database and len(self.exchange_database.strip())>0) else ""
+
             script = f"""
-            # Подключение к Exchange с учетными данными
+            $ErrorActionPreference = 'Stop'
             $PWord = ConvertTo-SecureString -String "{settings.admin_password}" -AsPlainText -Force
-            $PSCredential = New-Object System.Management.Automation.PSCredential('{settings.ad_domain}\\{settings.admin_username}', $PWord)
-            $Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri "http://{self.exchange_server}/PowerShell/" -Authentication Kerberos -Credential $PSCredential
-            
-            Import-PSSession $Session -DisableNameChecking
-            
+            $Cred = New-Object System.Management.Automation.PSCredential('{settings.ad_domain}\\{settings.admin_username}', $PWord)
+
+            function Connect-Exchange {{
+                param([string]$Uri, [string]$Auth)
+                try {{
+                    $sess = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri $Uri -Authentication $Auth -Credential $Cred -AllowRedirection
+                    Import-PSSession $sess -DisableNameChecking | Out-Null
+                    return $sess
+                }} catch {{
+                    return $null
+                }}
+            }}
+
+            $session = $null
+            # Пытаемся Kerberos по HTTP
+            $session = Connect-Exchange -Uri "http://{self.exchange_server}/PowerShell/" -Auth "Kerberos"
+            if ($null -eq $session) {{
+                # Фоллбек на Basic по HTTPS (требует включенной Basic на виртуалке Exchange)
+                $session = Connect-Exchange -Uri "https://{self.exchange_server}/PowerShell/" -Auth "Basic"
+            }}
+
+            if ($null -eq $session) {{
+                Write-Host "Failed to connect to Exchange PowerShell"
+                exit 1
+            }}
+
             try {{
-                # Создание почтового ящика
-                Enable-Mailbox -Identity "{sam_account_name}" -Database "{self.exchange_database}"
-                Write-Host "Mailbox created successfully for {sam_account_name}"
+                $mb = Get-Mailbox -Identity "{sam_account_name}" -ErrorAction SilentlyContinue
+                if ($null -eq $mb) {{
+                    Enable-Mailbox -Identity "{sam_account_name}"{database_arg} | Out-Null
+                    Write-Host "Mailbox created successfully for {sam_account_name}"
+                }} else {{
+                    Write-Host "Mailbox already exists for {sam_account_name}"
+                }}
+            }} catch {{
+                Write-Host "Mailbox create/enable error: $($_.Exception.Message)"
+            }} finally {{
+                if ($session) {{ Remove-PSSession $session }}
             }}
-            catch {{
-                Write-Host "Mailbox already exists or error occurred: $($_.Exception.Message)"
-            }}
-            
-            Remove-PSSession $Session
             """
-            
+
             return await self.winrm_service.execute_powershell(script)
             
         except Exception as e:

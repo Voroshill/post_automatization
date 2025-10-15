@@ -1904,4 +1904,4 @@ dev = ["black", "isort", "mypy", "pytest", "pytest-asyncio"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9"
-content-hash = "7ae8d0c4be9d90dd9466056d083440330e4427e348196ff7d2d767298cdf2903"
+content-hash = "f84f37e54d1ab110d9633017aae531a018322d692233b94b80037d156e4e47a6"

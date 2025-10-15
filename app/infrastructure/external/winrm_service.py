@@ -7,10 +7,14 @@ from app.core.logging.logger import winrm_logger
 
 class WinRMService:
     def __init__(self):
-        self.server = settings.winrm_server or settings.ad_server
+        # Приоритет: явный WINRM_SERVER -> EXCHANGE_SERVER -> AD_SERVER
+        self.server = settings.winrm_server or settings.exchange_server or settings.ad_server
         self.port = settings.winrm_port
         self.username = settings.admin_username
         self.password = settings.admin_password
+        self.domain = getattr(settings, 'ad_domain', '')
+        self.read_timeout_sec = getattr(settings, 'winrm_timeout', 30)
+        self.operation_timeout_sec = 10
         
         winrm_logger.info(f"WinRMService инициализирован. Сервер: {self.server}:{self.port}")
     
@@ -19,11 +23,14 @@ class WinRMService:
         try:
             winrm_logger.info(f"Выполнение PowerShell через WinRM")
             
+            scheme = 'https' if str(self.port) == '5986' else 'http'
             session = winrm.Session(
-                f"http://{self.server}:{self.port}/wsman",
-                auth=(f"{self.winrm_domain}\\{self.username}", self.password),
+                f"{scheme}://{self.server}:{self.port}/wsman",
+                auth=(f"{self.domain}\\{self.username}", self.password),
                 transport='ntlm',
-                server_cert_validation='ignore'
+                server_cert_validation='ignore',
+                read_timeout_sec=self.read_timeout_sec,
+                operation_timeout_sec=self.operation_timeout_sec
             )
 
             result = session.run_ps(script)

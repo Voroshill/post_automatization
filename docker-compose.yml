@@ -1,32 +1,37 @@
-version: '3.8'
-
 services:
   app:
     build: .
     container_name: user-management-app
-    ports:
-      - "8000:8000"
     env_file:
       - .env
     environment:
-      - DATABASE_URL=sqlite:///./data/users.db
-      - DEBUG=false
       - SCRIPTS_PATH=/app/scripts
+      - WINRM_SERVER=mailzone.central.st-ing.com
+      - WINRM_PORT=5985
+      - EXCHANGE_SERVER=mailzone.central.st-ing.com
     volumes:
       - ./data:/app/data
-      - ../123:/app/scripts
+      - ./scripts:/app/scripts
       - ./logs:/app/logs
-    networks:
-      - app-network
+    ports:
+      - "8080:8000"
+    dns:
+      - 10.0.0.10
+      - 10.0.0.11
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "pdc.central.st-ing.com:172.17.177.29"
+      - "mailzone.central.st-ing.com:172.17.177.25"
     restart: unless-stopped
     user: "1000:1000"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.user-management.rule=Host(`${DOMAIN}`)"
-      - "traefik.http.routers.user-management.entrypoints=web"
-      - "traefik.http.routers.user-management.tls.certresolver=letsencrypt"
-      - "traefik.http.services.user-management.loadbalancer.server.port=80"
+    networks:
+      - app_net
 
 networks:
-  app-network:
+  app_net:
+    name: user-management_net
     driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.30.0.0/24

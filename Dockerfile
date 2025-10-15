@@ -22,7 +22,6 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
     gcc \
-    nginx \
     wget \
     apt-transport-https \
     ca-certificates \
@@ -43,27 +42,16 @@ COPY --from=frontend-build /app/frontend/dist/* /app/static/
 
 RUN mkdir -p /app/scripts
 
-
-COPY nginx.conf /etc/nginx/sites-available/default
-
-
 RUN useradd -m -u 1000 appuser && \
     mkdir -p /app/data && \
     mkdir -p /app/logs && \
-    mkdir -p /run/nginx && \
-    mkdir -p /var/log/nginx && \
     chown -R appuser:appuser /app && \
-    chown -R appuser:appuser /var/log/nginx && \
-    chown -R appuser:appuser /var/lib/nginx && \
-    chown -R appuser:appuser /run/nginx && \
     chmod 755 /app/logs && \
-    chmod 755 /run/nginx && \
-    chmod 777 /run/nginx && \
-    chmod 777 /var/log/nginx
+    true
 
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh && chown appuser:appuser /app/start.sh
 
-EXPOSE 8000 80
+EXPOSE 8000
 
 CMD ["/app/start.sh"]
