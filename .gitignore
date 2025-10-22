@@ -45,6 +45,9 @@ logs/
 *.sqlite
 *.sqlite3
 
+# Exceptions (commit demo DB)
+!data/users.db
+
 # OS
 .DS_Store
 Thumbs.db
