@@ -13,25 +13,6 @@ services:
       - ./data:/app/data
       - ./scripts:/app/scripts
       - ./logs:/app/logs
-    ports:
-      - "8080:8000"
-    dns:
-      - 10.0.0.10
-      - 10.0.0.11
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-      - "pdc.central.st-ing.com:172.17.177.29"
-      - "mailzone.central.st-ing.com:172.17.177.25"
     restart: unless-stopped
     user: "1000:1000"
-    networks:
-      - app_net
-
-networks:
-  app_net:
-    name: user-management_net
-    driver: bridge
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.30.0.0/24
+    network_mode: host
