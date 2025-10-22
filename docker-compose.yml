@@ -16,3 +16,10 @@ services:
     restart: unless-stopped
     user: "1000:1000"
     network_mode: host
+
+  frontend:
+    build: ./frontend
+    container_name: user-management-frontend
+    ports:
+      - "80:80"
+    restart: unless-stopped
