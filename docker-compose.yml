@@ -15,11 +15,12 @@ services:
       - ./logs:/app/logs
     restart: unless-stopped
     user: "1000:1000"
-    network_mode: host
+    ports:
+      - "8000:8000"
 
   frontend:
     build: ./frontend
     container_name: user-management-frontend
     ports:
-      - "80:80"
+      - "8080:80"
     restart: unless-stopped

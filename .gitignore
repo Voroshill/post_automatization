@@ -1,7 +1,7 @@
 # Environment variables
-# .env
-# .env.local
-# .env.production
+.env
+.env.local
+.env.production
 
 # Python
 __pycache__/
@@ -44,9 +44,6 @@ logs/
 *.db
 *.sqlite
 *.sqlite3
-
-# Exceptions (commit demo DB)
-!data/users.db
 
 # OS
 .DS_Store

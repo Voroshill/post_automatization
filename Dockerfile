@@ -1,20 +1,3 @@
-# Этап 1: Сборка фронтенда
-FROM node:18-alpine as frontend-build
-
-WORKDIR /app/frontend
-
-
-COPY frontend/package*.json ./
-
-
-RUN npm install
-
-
-COPY frontend/ .
-
-
-RUN npm run build && ls -la dist/
-
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -37,8 +20,6 @@ RUN pip install poetry && \
     poetry install --only=main --no-root
 
 COPY . .
-
-COPY --from=frontend-build /app/frontend/dist/* /app/static/
 
 RUN mkdir -p /app/scripts
 

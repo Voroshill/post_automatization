@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     
     # 1C интеграция
     onec_endpoint: str = "/api/oneC/receive"
-    onec_allowed_origins: Union[str, List[str]] = "172.17.177.47:3048,localhost:3048,user-management.yourdomain.com,https://user-management.yourdomain.com"
+    onec_allowed_origins: Union[str, List[str]] = "172.17.177.57:3048,localhost:3048,user-management.yourdomain.com,https://user-management.yourdomain.com"
     
     # CORS настройки
     cors_origins: Union[str, List[str]] = "http://localhost,http://localhost:3000,https://user-management.yourdomain.com,https://www.user-management.yourdomain.com"
