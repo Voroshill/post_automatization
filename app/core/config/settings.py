@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     # Active Directory настройки
     ad_domain: str = "central.st-ing.com"
     ad_server: str = "dc.central.st-ing.com"
+    ad_use_ssl: bool = False
     ldap_port: int = 389
     ldap_ssl_port: int = 636
     
