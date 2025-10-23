@@ -5,7 +5,8 @@ from pathlib import Path
 router = APIRouter(tags=["web"])
 
 
-@router.get("/", response_class=FileResponse)
-async def dashboard():
-    """Главная страница - Vue.js приложение"""
-    return FileResponse("static/index.html")
+# @router.get("/", response_class=FileResponse)
+# async def dashboard():
+#     """Главная страница - Vue.js приложение"""
+#     return FileResponse("static/index.html")
+# Отключено - фронтенд в отдельном контейнере

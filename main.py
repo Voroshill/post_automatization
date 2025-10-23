@@ -29,7 +29,7 @@ app.include_router(onec.router, prefix="/api/onec", tags=["onec"])
 app.include_router(web.router, tags=["web"])
 
 
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+# app.mount("/", StaticFiles(directory="static", html=True), name="static")  # Отключено - фронтенд в отдельном контейнере
 
 @app.on_event("startup")
 async def startup_event():
