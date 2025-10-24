@@ -271,6 +271,21 @@ class LDAPService:
                 for attr_name, attr_value in validated_attributes.items():
                     ldap_logger.info(f"    {attr_name}: {attr_value} (тип: {type(attr_value).__name__})")
                 
+                # Дополнительная проверка проблемных атрибутов
+                for attr_name, attr_value in validated_attributes.items():
+                    if isinstance(attr_value, str):
+                        # Проверяем на пустые значения в критических атрибутах
+                        if attr_name in ['sAMAccountName', 'userPrincipalName', 'givenName', 'sn'] and not attr_value.strip():
+                            ldap_logger.error(f"    ПУСТОЕ ЗНАЧЕНИЕ в критическом атрибуте {attr_name}")
+                        
+                        # Проверяем на недопустимые символы
+                        for i, char in enumerate(attr_value):
+                            if ord(char) < 32 or ord(char) == 127:
+                                ldap_logger.error(f"    НЕДОПУСТИМЫЙ СИМВОЛ в {attr_name}[{i}]: '{char}' (код: {ord(char)})")
+                        # Проверяем длину
+                        if len(attr_value) > 255:
+                            ldap_logger.error(f"    СЛИШКОМ ДЛИННЫЙ {attr_name}: {len(attr_value)} символов")
+                
                 success = conn.add(user_dn, attributes=validated_attributes)
             
             # Логирование результата
