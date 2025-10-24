@@ -281,11 +281,10 @@ async def test_api_and_onec(settings: Settings):
     import urllib.error
 
     candidates = [
-        "http://localhost:8080/api/health",
-        "http://localhost:8080/health",
-        "http://localhost:8080/api/oneC/status",
-        "http://localhost:8080/oneC/status",
-        "http://localhost:8080/docs",
+        "http://172.17.177.57:8000/docs",
+        "http://172.17.177.57:8000/redoc", 
+        "http://172.17.177.57:8080/",
+        "http://172.17.177.56/",
     ]
 
     for url in candidates:
