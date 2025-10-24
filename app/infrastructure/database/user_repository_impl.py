@@ -155,6 +155,49 @@ class SQLAlchemyUserRepository(UserRepository):
             db_logger.error(f"Ошибка получения pending пользователей: {e}")
             raise
 
+    async def get_all_pending(self) -> List[User]:
+        """Получение всех пользователей ожидающих одобрения"""
+        try:
+            db_logger.info("Запрос всех pending пользователей")
+            user_models = self.db.query(UserModel).filter(UserModel.status == UserStatus.PENDING).all()
+            users = [User.model_validate(model) for model in user_models]
+            db_logger.info(f"Получено {len(users)} pending пользователей")
+            return users
+        except Exception as e:
+            db_logger.error(f"Ошибка получения всех pending пользователей: {e}")
+            raise
+
+    async def get_all_dismissed(self) -> List[User]:
+        """Получение всех уволенных пользователей"""
+        try:
+            db_logger.info("Запрос всех dismissed пользователей")
+            user_models = self.db.query(UserModel).filter(UserModel.status == UserStatus.DISMISSED).all()
+            users = [User.model_validate(model) for model in user_models]
+            db_logger.info(f"Получено {len(users)} dismissed пользователей")
+            return users
+        except Exception as e:
+            db_logger.error(f"Ошибка получения всех dismissed пользователей: {e}")
+            raise
+
+    async def search_users(self, query: str) -> List[User]:
+        """Поиск пользователей"""
+        try:
+            db_logger.info(f"Поиск пользователей: {query}")
+            search_term = f"%{query}%"
+            user_models = self.db.query(UserModel).filter(
+                (UserModel.firstname.ilike(search_term)) |
+                (UserModel.secondname.ilike(search_term)) |
+                (UserModel.thirdname.ilike(search_term)) |
+                (UserModel.unique_id.ilike(search_term)) |
+                (UserModel.mobile_phone.ilike(search_term))
+            ).all()
+            users = [User.model_validate(model) for model in user_models]
+            db_logger.info(f"Найдено {len(users)} пользователей")
+            return users
+        except Exception as e:
+            db_logger.error(f"Ошибка поиска пользователей: {e}")
+            raise
+
     async def get_dismissed_users_cursor(self, cursor: Optional[str] = None, limit: int = 20, search: Optional[str] = None, total_loaded: int = 0) -> dict:
         """Получение уволенных пользователей с курсорной пагинацией"""
         try:

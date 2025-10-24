@@ -43,3 +43,18 @@ class UserRepository(ABC):
     async def get_all_users_cursor(self, cursor: Optional[str] = None, limit: int = 20, search: Optional[str] = None, status: Optional[UserStatus] = None, total_loaded: int = 0) -> dict:
         """Получение всех пользователей с курсорной пагинацией"""
         pass
+
+    @abstractmethod
+    async def get_all_pending(self) -> List[User]:
+        """Получение всех пользователей ожидающих одобрения"""
+        pass
+
+    @abstractmethod
+    async def get_all_dismissed(self) -> List[User]:
+        """Получение всех уволенных пользователей"""
+        pass
+
+    @abstractmethod
+    async def search_users(self, query: str) -> List[User]:
+        """Поиск пользователей"""
+        pass
