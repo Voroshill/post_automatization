@@ -91,6 +91,7 @@ export default {
     }
   },
   mounted() {
+    console.log('StatusNotification mounted:', this.userId, this.initialStatus)
     if (this.currentStatus === 'creating') {
       this.startPolling()
     }
