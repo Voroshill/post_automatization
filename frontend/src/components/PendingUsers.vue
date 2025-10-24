@@ -1,11 +1,11 @@
 <template>
   <div class="pending-users">
     <!-- Уведомления о статусе -->
-    <div v-if="activeNotifications.length > 0" style="position: fixed; top: 10px; right: 10px; z-index: 9999; background: red; color: white; padding: 10px;">
+    <div v-if="activeNotifications && activeNotifications.length > 0" style="position: fixed; top: 10px; right: 10px; z-index: 9999; background: red; color: white; padding: 10px;">
       Debug: {{ activeNotifications.length }} notifications
     </div>
     <StatusNotification 
-      v-for="notification in activeNotifications"
+      v-for="notification in (activeNotifications || [])"
       :key="notification.userId"
       :user-id="notification.userId"
       :initial-status="notification.status"
@@ -215,9 +215,11 @@ export default {
         await userService.approveUser(userId)
         
         // Обновляем уведомление
-        const notificationIndex = activeNotifications.value.findIndex(n => n.userId === userId)
-        if (notificationIndex !== -1) {
-          activeNotifications.value[notificationIndex].status = 'creating'
+        if (activeNotifications.value) {
+          const notificationIndex = activeNotifications.value.findIndex(n => n.userId === userId)
+          if (notificationIndex !== -1) {
+            activeNotifications.value[notificationIndex].status = 'creating'
+          }
         }
         
         showAlert('Повторная попытка создания учетных записей запущена', 'info')
@@ -245,6 +247,9 @@ export default {
         await userService.approveUser(userId)
         
         // Добавляем уведомление о начале создания учетных записей
+        if (!activeNotifications.value) {
+          activeNotifications.value = []
+        }
         activeNotifications.value.push({
           userId: userId,
           status: 'creating'
@@ -620,6 +625,11 @@ export default {
     }
 
     onMounted(() => {
+      // Инициализируем activeNotifications если не инициализирован
+      if (!activeNotifications.value) {
+        activeNotifications.value = []
+      }
+      
       loadUsers(true)
       
       // Слушатель события создания пользователя
