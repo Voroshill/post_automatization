@@ -338,7 +338,11 @@ async def approve_user(
         
         async def background_creation():
             try:
-                result = await user_service._execute_creation_scripts(user)
+                # Добавляем таймаут для процесса создания (1 минута)
+                result = await asyncio.wait_for(
+                    user_service._execute_creation_scripts(user),
+                    timeout=60  # 1 минута
+                )
                 if not result["success"]:
                     # Откатываем статус при ошибке
                     await user_service.user_repository.update_status(user_id, UserStatus.PENDING)
@@ -347,6 +351,10 @@ async def approve_user(
                     # Успешно создано - переводим в APPROVED
                     await user_service.user_repository.update_status(user_id, UserStatus.APPROVED)
                     api_logger.info(f"Учетные записи для пользователя {user_id} созданы успешно")
+            except asyncio.TimeoutError:
+                # Таймаут - откатываем статус
+                await user_service.user_repository.update_status(user_id, UserStatus.PENDING)
+                api_logger.error(f"Таймаут создания учетных записей для пользователя {user_id} (превышено 1 минута)")
             except Exception as e:
                 # Откатываем статус при исключении
                 await user_service.user_repository.update_status(user_id, UserStatus.PENDING)

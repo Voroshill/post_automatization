@@ -207,7 +207,7 @@ class LDAPService:
                 'physicalDeliveryOfficeName': user_data.get('current_location_id', ''),
                 'telephoneNumber': user_data.get('work_phone', ''),
                 # Создаём DISABLED пользователя, затем установим пароль по LDAPS и включим
-                'userAccountControl': 514 
+                'userAccountControl': '514'  # ИСПРАВЛЕНО: строка вместо числа
             }
             
             # Проверка существования по sAMAccountName
@@ -233,6 +233,11 @@ class LDAPService:
                 for attr_name, attr_value in attributes.items():
                     if attr_value is None or attr_value == '':
                         ldap_logger.warning(f"    Пропускаем пустой атрибут: {attr_name}")
+                        continue
+                    
+                    # Специальная обработка для критических атрибутов
+                    if attr_name == 'userAccountControl':
+                        validated_attributes[attr_name] = str(attr_value)
                         continue
                     
                     # Очистка от недопустимых символов
