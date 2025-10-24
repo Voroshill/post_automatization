@@ -636,6 +636,35 @@ export default {
       window.addEventListener('userCreated', () => {
         loadUsers(true)
       })
+      
+      // Принудительная проверка статуса каждые 30 секунд для зависших процессов
+      setInterval(() => {
+        if (activeNotifications.value && activeNotifications.value.length > 0) {
+          activeNotifications.value.forEach(notification => {
+            if (notification.status === 'creating') {
+              console.log('Force checking status for user:', notification.userId)
+              // Принудительно обновляем статус
+              userService.getUserStatus(notification.userId).then(data => {
+                if (data.status !== 'creating') {
+                  console.log('Status changed:', data.status)
+                  // Обновляем уведомление
+                  const index = activeNotifications.value.findIndex(n => n.userId === notification.userId)
+                  if (index !== -1) {
+                    activeNotifications.value[index].status = data.status
+                  }
+                }
+              }).catch(error => {
+                console.error('Error checking status:', error)
+                // Если ошибка - считаем что процесс завис
+                const index = activeNotifications.value.findIndex(n => n.userId === notification.userId)
+                if (index !== -1) {
+                  activeNotifications.value[index].status = 'error'
+                }
+              })
+            }
+          })
+        }
+      }, 30000) // Каждые 30 секунд
     })
 
     // Следим за изменениями поискового запроса

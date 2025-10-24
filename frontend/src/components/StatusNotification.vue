@@ -39,6 +39,7 @@ export default {
       showNotification: false,
       currentStatus: this.initialStatus,
       pollingInterval: null,
+      timeoutId: null,
       statusMessages: {
         pending: {
           title: 'Ожидание',
@@ -132,6 +133,15 @@ export default {
         }
       } catch (error) {
         console.error('Ошибка проверки статуса:', error)
+        // Если ошибка при проверке статуса, считаем что процесс завис
+        if (this.currentStatus === 'creating') {
+          this.currentStatus = 'error'
+          this.showNotification = true
+          this.stopPolling()
+          setTimeout(() => {
+            this.closeNotification()
+          }, 10000)
+        }
       }
     },
     startPolling() {
@@ -139,11 +149,28 @@ export default {
       this.pollingInterval = setInterval(() => {
         this.checkStatus()
       }, 2000) // Проверяем каждые 2 секунды
+      
+      // Автоматический таймаут через 70 секунд (больше чем backend timeout)
+      this.timeoutId = setTimeout(() => {
+        if (this.currentStatus === 'creating') {
+          console.log('Polling timeout - switching to error')
+          this.currentStatus = 'error'
+          this.showNotification = true
+          this.stopPolling()
+          setTimeout(() => {
+            this.closeNotification()
+          }, 10000)
+        }
+      }, 70000) // 70 секунд
     },
     stopPolling() {
       if (this.pollingInterval) {
         clearInterval(this.pollingInterval)
         this.pollingInterval = null
+      }
+      if (this.timeoutId) {
+        clearTimeout(this.timeoutId)
+        this.timeoutId = null
       }
     },
     closeNotification() {

@@ -210,54 +210,82 @@ class LDAPService:
                 'userAccountControl': '514'  # ИСПРАВЛЕНО: строка вместо числа
             }
             
+            # Валидация атрибутов перед использованием
+            validated_attributes = {}
+            for attr_name, attr_value in attributes.items():
+                if attr_value is None or attr_value == '':
+                    ldap_logger.warning(f"    Пропускаем пустой атрибут: {attr_name}")
+                    continue
+                
+                # Специальная обработка для критических атрибутов
+                if attr_name == 'userAccountControl':
+                    validated_attributes[attr_name] = str(attr_value)
+                    continue
+                
+                # Очистка от недопустимых символов
+                if isinstance(attr_value, str):
+                    # Удаляем управляющие символы и недопустимые символы
+                    cleaned_value = ''.join(char for char in attr_value if ord(char) >= 32 and ord(char) != 127)
+                    if cleaned_value != attr_value:
+                        ldap_logger.warning(f"    Очищен атрибут {attr_name}: '{attr_value}' -> '{cleaned_value}'")
+                    validated_attributes[attr_name] = cleaned_value
+                else:
+                    validated_attributes[attr_name] = attr_value
+
             # Проверка существования по sAMAccountName
             conn.search('DC=central,DC=st-ing,DC=com', f'(sAMAccountName={sam_account_name})', attributes=['distinguishedName'])
             exists_dn = conn.entries[0].distinguishedName.value if conn.entries else None
 
-            # Создание пользователя в AD (если отсутствует)
+            # Создание или обновление пользователя в AD
             if exists_dn:
                 ldap_logger.info(f"Пользователь уже существует: {sam_account_name} -> {exists_dn}")
-                success = True
                 user_dn = exists_dn
+                
+                # Обновляем атрибуты существующего пользователя
+                ldap_logger.info(f"Обновление атрибутов существующего пользователя...")
+                
+                # Подготавливаем атрибуты для обновления (исключаем objectClass и userAccountControl)
+                update_attributes = {}
+                for attr_name, attr_value in validated_attributes.items():
+                    if attr_name not in ['objectClass', 'userAccountControl'] and attr_value:
+                        update_attributes[attr_name] = attr_value
+                
+                ldap_logger.info(f"  Атрибуты для обновления: {len(update_attributes)} атрибутов")
+                for attr_name, attr_value in update_attributes.items():
+                    ldap_logger.info(f"    {attr_name}: {attr_value}")
+                
+                # Выполняем обновление атрибутов
+                success = conn.modify(user_dn, update_attributes)
+                ldap_logger.info(f"  Результат обновления: {success}")
+                ldap_logger.info(f"  Код результата: {conn.result.get('result', 'N/A')}")
+                ldap_logger.info(f"  Описание: {conn.result.get('description', 'N/A')}")
+                
+                if not success:
+                    ldap_logger.error(f"Ошибка обновления пользователя: {conn.result}")
             else:
                 ldap_logger.info(f"Создание пользователя в AD...")
                 ldap_logger.info(f"  DN: {user_dn}")
-                ldap_logger.info(f"  Атрибуты: {len(attributes)} атрибутов")
+                ldap_logger.info(f"  Атрибуты: {len(validated_attributes)} атрибутов")
                 
                 # Детальное логирование каждого атрибута
-                for attr_name, attr_value in attributes.items():
+                for attr_name, attr_value in validated_attributes.items():
                     ldap_logger.info(f"    {attr_name}: {attr_value} (тип: {type(attr_value).__name__})")
                 
-                # Валидация атрибутов
-                validated_attributes = {}
-                for attr_name, attr_value in attributes.items():
-                    if attr_value is None or attr_value == '':
-                        ldap_logger.warning(f"    Пропускаем пустой атрибут: {attr_name}")
-                        continue
-                    
-                    # Специальная обработка для критических атрибутов
-                    if attr_name == 'userAccountControl':
-                        validated_attributes[attr_name] = str(attr_value)
-                        continue
-                    
-                    # Очистка от недопустимых символов
-                    if isinstance(attr_value, str):
-                        # Удаляем управляющие символы и недопустимые символы
-                        cleaned_value = ''.join(char for char in attr_value if ord(char) >= 32 and ord(char) != 127)
-                        if cleaned_value != attr_value:
-                            ldap_logger.warning(f"    Очищен атрибут {attr_name}: '{attr_value}' -> '{cleaned_value}'")
-                        validated_attributes[attr_name] = cleaned_value
-                    else:
-                        validated_attributes[attr_name] = attr_value
-                
-                ldap_logger.info(f"  Валидированные атрибуты: {len(validated_attributes)} атрибутов")
                 success = conn.add(user_dn, attributes=validated_attributes)
-            ldap_logger.info(f"  Результат создания: {success}")
+            
+            # Логирование результата
+            if exists_dn:
+                ldap_logger.info(f"  Результат обновления: {success}")
+            else:
+                ldap_logger.info(f"  Результат создания: {success}")
             ldap_logger.info(f"  Код результата: {conn.result.get('result', 'N/A')}")
             ldap_logger.info(f"  Описание: {conn.result.get('description', 'N/A')}")
             
             if success:
-                ldap_logger.info(f"✅ Пользователь {sam_account_name} успешно создан в AD через LDAP")
+                if exists_dn:
+                    ldap_logger.info(f"✅ Пользователь {sam_account_name} успешно обновлен в AD через LDAP")
+                else:
+                    ldap_logger.info(f"✅ Пользователь {sam_account_name} успешно создан в AD через LDAP")
                 # Установка пароля по LDAPS и включение учётной записи
                 ldap_logger.info(f"Установка пароля для пользователя по LDAPS...")
                 try:
