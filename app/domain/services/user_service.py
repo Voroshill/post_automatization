@@ -138,7 +138,8 @@ class UserService:
             sam_account_name = ad_result.get("sam_account_name")
             app_logger.info(f"Пользователь {sam_account_name} успешно создан в AD")
             
-            mailbox_result = await self.exchange_service.create_mailbox(sam_account_name)
+            user_principal_name = ad_result.get("user_principal_name")
+            mailbox_result = await self.exchange_service.create_mailbox(sam_account_name, user_principal_name)
             if not mailbox_result["success"]:
                 app_logger.warning(f"Ошибка создания почтового ящика: {mailbox_result['stderr']}")
             
