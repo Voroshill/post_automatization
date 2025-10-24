@@ -316,7 +316,7 @@ async def approve_user(
     try:
         api_logger.info(f"Запрос одобрения пользователя ID: {user_id}")
         
-        user = await user_service.user_repository.get_by_id(user_id)
+        user = await user_service.user_repository.get_user_by_id(user_id)
         if not user:
             api_logger.warning(f"Пользователь с ID {user_id} не найден")
             raise HTTPException(
@@ -355,7 +355,7 @@ async def approve_user(
         asyncio.create_task(background_creation())
         
         api_logger.info(f"Пользователь {user_id} одобрен, создание учетных записей запущено в фоне")
-        updated_user = await user_service.user_repository.get_by_id(user_id)
+        updated_user = await user_service.user_repository.get_user_by_id(user_id)
         return user_to_response(updated_user)
             
     except HTTPException:
@@ -380,7 +380,7 @@ async def get_user_status(
 ):
     """Получение статуса пользователя для отслеживания создания учетных записей"""
     try:
-        user = await user_service.user_repository.get_by_id(user_id)
+        user = await user_service.user_repository.get_user_by_id(user_id)
         if not user:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
         
@@ -453,7 +453,7 @@ async def dismiss_user(
     try:
         api_logger.info(f"Запрос увольнения пользователя ID: {user_id}")
         
-        user = await user_service.user_repository.get_by_id(user_id)
+        user = await user_service.user_repository.get_user_by_id(user_id)
         if not user:
             api_logger.warning(f"Пользователь с ID {user_id} не найден")
             raise HTTPException(
@@ -473,7 +473,7 @@ async def dismiss_user(
         
         if result["success"]:
             api_logger.info(f"Пользователь {user_id} успешно уволен и заблокирован в AD")
-            updated_user = await user_service.user_repository.get_by_id(user_id)
+            updated_user = await user_service.user_repository.get_user_by_id(user_id)
             return user_to_response(updated_user)
         else:
             await user_service.user_repository.update_status(user_id, user.status)
