@@ -65,19 +65,25 @@ class ExchangeService:
             try {{
                 $mb = Get-Mailbox -Identity "{sam_account_name}" -ErrorAction SilentlyContinue
                 if ($null -eq $mb) {{
-                    Enable-Mailbox -Identity "{sam_account_name}"{database_arg} | Out-Null
+                    Write-Host "Creating mailbox for {sam_account_name}..."
+                    $result = Enable-Mailbox -Identity "{sam_account_name}"{database_arg} -ErrorAction Stop
                     Write-Host "Mailbox created successfully for {sam_account_name}"
+                    Write-Host "Result: $($result | ConvertTo-Json)"
                 }} else {{
                     Write-Host "Mailbox already exists for {sam_account_name}"
+                    Write-Host "Existing mailbox: $($mb | ConvertTo-Json)"
                 }}
             }} catch {{
                 Write-Host "Mailbox create/enable error: $($_.Exception.Message)"
+                Write-Host "Error details: $($_.Exception)"
             }} finally {{
                 if ($session) {{ Remove-PSSession $session }}
             }}
             """
 
-            return await self.winrm_service.execute_powershell(script)
+            result = await self.winrm_service.execute_powershell(script)
+            exchange_logger.info(f"Exchange PowerShell result: {result}")
+            return result
             
         except Exception as e:
             exchange_logger.error(f"Исключение при создании почтового ящика: {e}")
