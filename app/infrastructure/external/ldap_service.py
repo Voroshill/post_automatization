@@ -223,7 +223,30 @@ class LDAPService:
                 ldap_logger.info(f"Создание пользователя в AD...")
                 ldap_logger.info(f"  DN: {user_dn}")
                 ldap_logger.info(f"  Атрибуты: {len(attributes)} атрибутов")
-                success = conn.add(user_dn, attributes=attributes)
+                
+                # Детальное логирование каждого атрибута
+                for attr_name, attr_value in attributes.items():
+                    ldap_logger.info(f"    {attr_name}: {attr_value} (тип: {type(attr_value).__name__})")
+                
+                # Валидация атрибутов
+                validated_attributes = {}
+                for attr_name, attr_value in attributes.items():
+                    if attr_value is None or attr_value == '':
+                        ldap_logger.warning(f"    Пропускаем пустой атрибут: {attr_name}")
+                        continue
+                    
+                    # Очистка от недопустимых символов
+                    if isinstance(attr_value, str):
+                        # Удаляем управляющие символы и недопустимые символы
+                        cleaned_value = ''.join(char for char in attr_value if ord(char) >= 32 and ord(char) != 127)
+                        if cleaned_value != attr_value:
+                            ldap_logger.warning(f"    Очищен атрибут {attr_name}: '{attr_value}' -> '{cleaned_value}'")
+                        validated_attributes[attr_name] = cleaned_value
+                    else:
+                        validated_attributes[attr_name] = attr_value
+                
+                ldap_logger.info(f"  Валидированные атрибуты: {len(validated_attributes)} атрибутов")
+                success = conn.add(user_dn, attributes=validated_attributes)
             ldap_logger.info(f"  Результат создания: {success}")
             ldap_logger.info(f"  Код результата: {conn.result.get('result', 'N/A')}")
             ldap_logger.info(f"  Описание: {conn.result.get('description', 'N/A')}")
