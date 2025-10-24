@@ -80,6 +80,11 @@ class UserService {
     return this.makeRequest(`${API_BASE_URL}/?${params}`)
   }
 
+  // Алиас для совместимости
+  async getAllUsers(cursor = null, limit = 20, search = '', status = null, totalLoaded = 0) {
+    return this.getAllUsersInfinite(cursor, limit, search, status, totalLoaded)
+  }
+
   async approveUser(userId) {
     try {
       const result = await this.makeRequest(`${API_BASE_URL}/${userId}/approve`, {
@@ -96,6 +101,15 @@ class UserService {
       const result = await this.makeRequest(`${API_BASE_URL}/${userId}/reject`, {
         method: 'PUT'
       })
+      return result
+    } catch (error) {
+      throw error
+    }
+  }
+
+  async getUserStatus(userId) {
+    try {
+      const result = await this.makeRequest(`${API_BASE_URL}/${userId}/status`)
       return result
     } catch (error) {
       throw error

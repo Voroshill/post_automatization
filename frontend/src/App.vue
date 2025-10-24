@@ -279,10 +279,17 @@ const handleScroll = () => {
 // Инициализация при загрузке
 onMounted(() => {
   console.log('App mounted, showLoginModal:', showLoginModal.value)
-  // Инициализируем errorHandler с notification компонентом
-  if (notificationComponent.value) {
-    errorHandler.setNotificationInstance(notificationComponent.value)
-  }
+  
+  // Инициализируем errorHandler с notification компонентом с задержкой
+  setTimeout(() => {
+    if (notificationComponent.value) {
+      errorHandler.setNotificationInstance(notificationComponent.value)
+      console.log('ErrorHandler initialized with notification component')
+    } else {
+      console.warn('Notification component not found')
+    }
+  }, 100)
+  
   // Показываем модальное окно входа при загрузке
   showLoginModal.value = true
   console.log('After setting showLoginModal:', showLoginModal.value)

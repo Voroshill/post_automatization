@@ -12,10 +12,12 @@ class ErrorHandler {
   }
 
   showNotification(type, title, message, duration = 5000) {
-    if (this.notificationInstance) {
+    if (this.notificationInstance && this.notificationInstance.addNotification) {
       this.notificationInstance.addNotification(type, title, message, duration);
     } else {
       console.warn('Notification component not initialized. Cannot show notification:', { type, title, message });
+      // Fallback - показываем alert
+      alert(`${title}: ${message}`);
     }
   }
 
@@ -76,10 +78,12 @@ class ErrorHandler {
       type = 'info';
     }
 
-    if (this.notificationInstance) {
+    if (this.notificationInstance && this.notificationInstance.addNotification) {
       this.notificationInstance.addNotification(type, title, message, 8000);
     } else {
       console.error(`Error: ${title} - ${message}`, error);
+      // Fallback
+      alert(`${title}: ${message}`);
     }
   }
 
@@ -201,34 +205,39 @@ class ErrorHandler {
       type = 'error';
     }
 
-    if (this.notificationInstance) {
+    if (this.notificationInstance && this.notificationInstance.addNotification) {
       this.notificationInstance.addNotification(type, title, message, 8000);
     } else {
       console.error(`API Error: ${title} - ${message}`, response);
+      // Fallback
+      alert(`${title}: ${message}`);
     }
   }
 
   showSuccess(title, message = '') {
-    if (this.notificationInstance) {
+    if (this.notificationInstance && this.notificationInstance.addNotification) {
       this.notificationInstance.addNotification('success', title, message);
     } else {
       console.log(`Success: ${title} - ${message}`);
+      alert(`${title}: ${message}`);
     }
   }
 
   showWarning(title, message = '') {
-    if (this.notificationInstance) {
+    if (this.notificationInstance && this.notificationInstance.addNotification) {
       this.notificationInstance.addNotification('warning', title, message);
     } else {
       console.warn(`Warning: ${title} - ${message}`);
+      alert(`${title}: ${message}`);
     }
   }
 
   showInfo(title, message = '') {
-    if (this.notificationInstance) {
+    if (this.notificationInstance && this.notificationInstance.addNotification) {
       this.notificationInstance.addNotification('info', title, message);
     } else {
       console.info(`Info: ${title} - ${message}`);
+      alert(`${title}: ${message}`);
     }
   }
 }
