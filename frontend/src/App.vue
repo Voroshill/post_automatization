@@ -213,7 +213,7 @@ const login = async () => {
       loginForm.username = ''
       loginForm.password = ''
       
-      errorHandler.showSuccess('Вход выполнен', 'Добро пожаловать в систему управления пользователями')
+      // Уведомление о входе убрано
     } else {
       errorHandler.showWarning('Ошибка входа', result.message || 'Неверное имя пользователя или пароль')
     }
@@ -225,7 +225,7 @@ const login = async () => {
 const logout = () => {
   isAuthenticated.value = false
   activeTab.value = 'search'
-  errorHandler.showInfo('Выход выполнен', 'Вы успешно вышли из системы')
+  // Уведомление о выходе убрано
 }
 
 

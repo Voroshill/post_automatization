@@ -1,9 +1,6 @@
 <template>
   <div class="pending-users">
     <!-- Уведомления о статусе -->
-    <div v-if="activeNotifications && activeNotifications.length > 0" style="position: fixed; top: 10px; right: 10px; z-index: 9999; background: red; color: white; padding: 10px;">
-      Debug: {{ activeNotifications.length }} notifications
-    </div>
     <StatusNotification 
       v-for="notification in (activeNotifications || [])"
       :key="notification.userId"
