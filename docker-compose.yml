@@ -14,7 +14,7 @@ services:
       - ./scripts:/app/scripts
       - ./logs:/app/logs
     restart: unless-stopped
-    user: "1000:1000"
+    # user: "1000:1000"  # Закомментировано для избежания проблем с правами
     ports:
       - "172.17.177.57:8000:8000"
 
