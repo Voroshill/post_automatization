@@ -37,6 +37,11 @@ class ExportService:
                     'bg_color': '#FFF2CC',
                     'align': 'center'
                 }),
+                UserStatus.CREATING: workbook.add_format({
+                    'border': 1,
+                    'bg_color': '#B7D7FF',
+                    'align': 'center'
+                }),
                 UserStatus.APPROVED: workbook.add_format({
                     'border': 1,
                     'bg_color': '#D5E8D4',

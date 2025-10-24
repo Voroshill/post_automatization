@@ -316,7 +316,7 @@ async def approve_user(
     try:
         api_logger.info(f"Запрос одобрения пользователя ID: {user_id}")
         
-        user = await user_service.user_repository.get_user_by_id(user_id)
+        user = await user_service.user_repository.get_by_id(user_id)
         if not user:
             api_logger.warning(f"Пользователь с ID {user_id} не найден")
             raise HTTPException(
@@ -329,28 +329,34 @@ async def approve_user(
                 }
             )
         
-        await user_service.user_repository.update_status(user_id, UserStatus.APPROVED)
-        api_logger.info(f"Статус пользователя {user_id} обновлен на APPROVED")
+        # Устанавливаем статус "В процессе создания"
+        await user_service.user_repository.update_status(user_id, UserStatus.CREATING)
+        api_logger.info(f"Статус пользователя {user_id} обновлен на CREATING")
         
-        result = await user_service._execute_creation_scripts(user)
+        # Запускаем создание учетных записей в фоне с обработкой ошибок
+        import asyncio
         
-        if result["success"]:
-            api_logger.info(f"Пользователь {user_id} успешно одобрен и создан в AD")
-            updated_user = await user_service.user_repository.get_user_by_id(user_id)
-            return user_to_response(updated_user)
-        else:
-            await user_service.user_repository.update_status(user_id, UserStatus.PENDING)
-            api_logger.error(f"Ошибка создания пользователя {user_id} в AD: {result['stderr']}")
-            
-            raise HTTPException(
-                status_code=500,
-                detail={
-                    "success": False,
-                    "error_type": "ad_creation_failed",
-                    "message": "Сотрудник одобрен, но произошла ошибка при создании в Active Directory",
-                    "details": f"Ошибка: {result['stderr']}. Попробуйте создать сотрудника вручную в AD или обратитесь к системному администратору"
-                }
-            )
+        async def background_creation():
+            try:
+                result = await user_service._execute_creation_scripts(user)
+                if not result["success"]:
+                    # Откатываем статус при ошибке
+                    await user_service.user_repository.update_status(user_id, UserStatus.PENDING)
+                    api_logger.error(f"Ошибка создания учетных записей для пользователя {user_id}: {result.get('stderr', 'Неизвестная ошибка')}")
+                else:
+                    # Успешно создано - переводим в APPROVED
+                    await user_service.user_repository.update_status(user_id, UserStatus.APPROVED)
+                    api_logger.info(f"Учетные записи для пользователя {user_id} созданы успешно")
+            except Exception as e:
+                # Откатываем статус при исключении
+                await user_service.user_repository.update_status(user_id, UserStatus.PENDING)
+                api_logger.error(f"Критическая ошибка создания учетных записей для пользователя {user_id}: {e}")
+        
+        asyncio.create_task(background_creation())
+        
+        api_logger.info(f"Пользователь {user_id} одобрен, создание учетных записей запущено в фоне")
+        updated_user = await user_service.user_repository.get_by_id(user_id)
+        return user_to_response(updated_user)
             
     except HTTPException:
         raise
@@ -365,6 +371,41 @@ async def approve_user(
                 "details": "Не удалось одобрить сотрудника. Попробуйте повторить операцию позже"
             }
         )
+
+
+@router.get("/{user_id}/status")
+async def get_user_status(
+    user_id: int,
+    user_service: UserService = Depends(get_user_service)
+):
+    """Получение статуса пользователя для отслеживания создания учетных записей"""
+    try:
+        user = await user_service.user_repository.get_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
+        return {
+            "user_id": user_id,
+            "status": user.status,
+            "message": _get_status_message(user.status)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"Ошибка получения статуса пользователя {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Ошибка получения статуса")
+
+
+def _get_status_message(status: UserStatus) -> str:
+    """Получение сообщения для статуса"""
+    messages = {
+        UserStatus.PENDING: "Ожидает одобрения",
+        UserStatus.CREATING: "Создание учетных записей...",
+        UserStatus.APPROVED: "Успешно создан",
+        UserStatus.REJECTED: "Отклонен",
+        UserStatus.DISMISSED: "Уволен"
+    }
+    return messages.get(status, "Неизвестный статус")
 
 
 @router.put("/{user_id}/reject", response_model=UserResponse)
@@ -412,7 +453,7 @@ async def dismiss_user(
     try:
         api_logger.info(f"Запрос увольнения пользователя ID: {user_id}")
         
-        user = await user_service.user_repository.get_user_by_id(user_id)
+        user = await user_service.user_repository.get_by_id(user_id)
         if not user:
             api_logger.warning(f"Пользователь с ID {user_id} не найден")
             raise HTTPException(
@@ -432,7 +473,7 @@ async def dismiss_user(
         
         if result["success"]:
             api_logger.info(f"Пользователь {user_id} успешно уволен и заблокирован в AD")
-            updated_user = await user_service.user_repository.get_user_by_id(user_id)
+            updated_user = await user_service.user_repository.get_by_id(user_id)
             return user_to_response(updated_user)
         else:
             await user_service.user_repository.update_status(user_id, user.status)

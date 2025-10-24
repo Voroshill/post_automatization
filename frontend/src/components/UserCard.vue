@@ -107,15 +107,20 @@
       <div v-else>
         <button 
           @click="$emit('approve', user.id)" 
-          class="btn btn-success action-btn"
-          :disabled="processing"
+          class="btn action-btn"
+          :class="getApproveButtonClass()"
+          :disabled="processing || user.status === 'creating'"
         >
-          ДОБАВИТЬ
+          <span v-if="user.status === 'creating'" class="spinner-border spinner-border-sm me-2" role="status">
+            <span class="visually-hidden">Загрузка...</span>
+          </span>
+          <i v-else-if="user.status === 'creating'" class="fas fa-spinner fa-spin me-2"></i>
+          {{ getApproveButtonText() }}
         </button>
         <button 
           @click="$emit('reject', user.id)" 
           class="btn btn-danger action-btn"
-          :disabled="processing"
+          :disabled="processing || user.status === 'creating'"
         >
           ОТКЛОНИТЬ
         </button>
@@ -171,6 +176,18 @@ export default {
       } catch {
         return dateString
       }
+    },
+    getApproveButtonClass() {
+      if (this.user.status === 'creating') {
+        return 'btn-warning'
+      }
+      return 'btn-success'
+    },
+    getApproveButtonText() {
+      if (this.user.status === 'creating') {
+        return 'СОЗДАНИЕ...'
+      }
+      return 'ДОБАВИТЬ'
     },
     getStatusClass(status) {
       const classes = {
@@ -355,6 +372,53 @@ export default {
 
 .bg-info {
   background: linear-gradient(135deg, #17a2b8 0%, #6f42c1 100%) !important;
+}
+
+/* Анимации для кнопок */
+.action-btn {
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.action-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.action-btn.btn-warning {
+  background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+  border: none;
+  color: #212529;
+  animation: pulse-warning 2s infinite;
+}
+
+.action-btn.btn-warning:hover:not(:disabled) {
+  background: linear-gradient(135deg, #e0a800 0%, #e55a00 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(255, 193, 7, 0.3);
+}
+
+@keyframes pulse-warning {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(255, 193, 7, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0);
+  }
+}
+
+/* Анимация загрузки */
+.fa-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 /* Адаптивность */

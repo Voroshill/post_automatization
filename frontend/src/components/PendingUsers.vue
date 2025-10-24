@@ -1,5 +1,15 @@
 <template>
   <div class="pending-users">
+    <!-- Уведомления о статусе -->
+    <StatusNotification 
+      v-for="notification in activeNotifications"
+      :key="notification.userId"
+      :user-id="notification.userId"
+      :initial-status="notification.status"
+      @retry-creation="retryUserCreation"
+      @view-details="viewUserDetails"
+    />
+    
     <div class="row">
       <div class="col-12">
         <div class="card">
@@ -69,12 +79,14 @@ import { Modal } from 'bootstrap'
 import userService from '../services/userService'
 import UserCard from './UserCard.vue'
 import InfiniteScroll from './InfiniteScroll.vue'
+import StatusNotification from './StatusNotification.vue'
 
 export default {
   name: 'PendingUsers',
   components: {
     UserCard,
-    InfiniteScroll
+    InfiniteScroll,
+    StatusNotification
   },
   props: {
     searchQuery: {
@@ -104,6 +116,7 @@ export default {
     const totalLoaded = ref(0)
     const totalCount = ref(0)
     const actionResults = ref({}) // Хранит результаты действий для каждого пользователя
+    const activeNotifications = ref([]) // Активные уведомления о статусе
     const createForm = ref({
       unique: '',
       firstname: '',
@@ -182,6 +195,44 @@ export default {
       loadUsers(true)
     }
 
+    // Метод для обновления статуса пользователя
+    const updateUserStatus = (userId, newStatus) => {
+      const userIndex = users.value.findIndex(user => user.id === userId)
+      if (userIndex !== -1) {
+        users.value[userIndex].status = newStatus
+        // Принудительно обновляем реактивность
+        users.value = [...users.value]
+      }
+    }
+
+    // Метод для повторной попытки создания пользователя
+    const retryUserCreation = async (userId) => {
+      try {
+        console.log('Retrying user creation:', userId)
+        await userService.approveUser(userId)
+        
+        // Обновляем уведомление
+        const notificationIndex = activeNotifications.value.findIndex(n => n.userId === userId)
+        if (notificationIndex !== -1) {
+          activeNotifications.value[notificationIndex].status = 'creating'
+        }
+        
+        showAlert('Повторная попытка создания учетных записей запущена', 'info')
+        updateUserStatus(userId, 'creating')
+      } catch (error) {
+        console.error('Ошибка при повторной попытке:', error)
+        showAlert('Ошибка при повторной попытке создания', 'danger')
+      }
+    }
+
+    // Метод для просмотра деталей пользователя
+    const viewUserDetails = (userId) => {
+      const user = users.value.find(u => u.id === userId)
+      if (user) {
+        showAlert(`Пользователь ${user.secondname} ${user.firstname} успешно создан!\n\n📧 Email: ${user.secondname.toLowerCase()}.${user.firstname.toLowerCase()}@st-ing.com\n🏢 Компания: ${user.company}\n📱 Телефон: ${user.mobile_phone || 'Не указан'}`, 'success')
+      }
+    }
+
     // Методы handleSearch и clearSearch теперь в родительском компоненте
 
     const approveUser = async (userId) => {
@@ -189,14 +240,18 @@ export default {
       try {
         console.log('Approving user:', userId)
         await userService.approveUser(userId)
-        showAlert('Пользователь успешно создан в AD', 'success')
+        
+        // Добавляем уведомление о начале создания учетных записей
+        activeNotifications.value.push({
+          userId: userId,
+          status: 'creating'
+        })
+        
+        showAlert('Пользователь одобрен, создание учетных записей запущено', 'info')
         // Показываем результат действия
-        actionResults.value[userId] = 'Добавлен'
+        actionResults.value[userId] = 'Создание...'
         // Обновляем статус пользователя в массиве
-        const userIndex = users.value.findIndex(user => user.id === userId)
-        if (userIndex !== -1) {
-          users.value[userIndex].status = 'approved'
-        }
+        updateUserStatus(userId, 'creating')
         console.log('Action result set:', actionResults.value)
         // Пользователь исчезнет только после перезагрузки страницы
       } catch (error) {

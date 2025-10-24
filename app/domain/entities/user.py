@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 class UserStatus(str, Enum):
     PENDING = "pending"
+    CREATING = "creating"  # В процессе создания учетных записей
     APPROVED = "approved"
     REJECTED = "rejected"
     DISMISSED = "dismissed" 
