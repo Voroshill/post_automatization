@@ -77,7 +77,14 @@ async def create_user_manually(
         user_dict["mobile_phone"] = user_dict.pop("MobilePhone")
         user_dict["work_phone"] = user_dict.pop("WorkPhone")
         user_dict["birth_date"] = user_dict.pop("BirthDate")
-        user_dict["is_engineer"] = user_dict.pop("is_engeneer")
+        # Правильно обрабатываем is_engeneer: '0' -> 0, '1' -> 1, пустая строка -> None
+        is_engeneer_value = user_dict.pop("is_engeneer")
+        if is_engeneer_value in ['0', '']:
+            user_dict["is_engineer"] = 0
+        elif is_engeneer_value == '1':
+            user_dict["is_engineer"] = 1
+        else:
+            user_dict["is_engineer"] = None
         user_dict["upload_date"] = user_dict.pop("UploadDate")
         
         user_dict["status"] = UserStatus.PENDING
@@ -333,36 +340,51 @@ async def approve_user(
         await user_service.user_repository.update_status(user_id, UserStatus.CREATING)
         api_logger.info(f"Статус пользователя {user_id} обновлен на CREATING")
         
-        # Запускаем создание учетных записей в фоне с обработкой ошибок
+        # Ждем результат создания учетных записей с таймаутом
         import asyncio
         
-        async def background_creation():
-            try:
-                # Добавляем таймаут для процесса создания (1 минута)
-                result = await asyncio.wait_for(
-                    user_service._execute_creation_scripts(user),
-                    timeout=60  # 1 минута
+        try:
+            result = await asyncio.wait_for(
+                user_service._execute_creation_scripts(user),
+                timeout=20  
+            )
+            
+            if not result["success"]:
+                # Откатываем статус при ошибке
+                await user_service.user_repository.update_status(user_id, UserStatus.PENDING)
+                api_logger.error(f"Ошибка создания учетных записей для пользователя {user_id}: {result.get('stderr', 'Неизвестная ошибка')}")
+                
+                # Возвращаем ошибку клиенту
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        "success": False,
+                        "error_type": "creation_failed",
+                        "message": "Ошибка создания учетных записей",
+                        "details": result.get('stderr', 'Не удалось создать учетные записи в Active Directory')
+                    }
                 )
-                if not result["success"]:
-                    # Откатываем статус при ошибке
-                    await user_service.user_repository.update_status(user_id, UserStatus.PENDING)
-                    api_logger.error(f"Ошибка создания учетных записей для пользователя {user_id}: {result.get('stderr', 'Неизвестная ошибка')}")
-                else:
-                    # Успешно создано - переводим в APPROVED
-                    await user_service.user_repository.update_status(user_id, UserStatus.APPROVED)
-                    api_logger.info(f"Учетные записи для пользователя {user_id} созданы успешно")
-            except asyncio.TimeoutError:
-                # Таймаут - откатываем статус
-                await user_service.user_repository.update_status(user_id, UserStatus.PENDING)
-                api_logger.error(f"Таймаут создания учетных записей для пользователя {user_id} (превышено 1 минута)")
-            except Exception as e:
-                # Откатываем статус при исключении
-                await user_service.user_repository.update_status(user_id, UserStatus.PENDING)
-                api_logger.error(f"Критическая ошибка создания учетных записей для пользователя {user_id}: {e}")
+            else:
+                # Успешно создано - переводим в APPROVED
+                await user_service.user_repository.update_status(user_id, UserStatus.APPROVED)
+                api_logger.info(f"Учетные записи для пользователя {user_id} созданы успешно")
+                
+        except asyncio.TimeoutError:
+            # Таймаут - откатываем статус
+            await user_service.user_repository.update_status(user_id, UserStatus.PENDING)
+            api_logger.error(f"Таймаут создания учетных записей для пользователя {user_id} (превышено 20 секунд)")
+            
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "success": False,
+                    "error_type": "timeout",
+                    "message": "Таймаут создания учетных записей",
+                    "details": "Процесс создания учетных записей занял слишком много времени (более 20 секунд). Попробуйте повторить операцию позже"
+                }
+            )
         
-        asyncio.create_task(background_creation())
-        
-        api_logger.info(f"Пользователь {user_id} одобрен, создание учетных записей запущено в фоне")
+        api_logger.info(f"Пользователь {user_id} успешно одобрен и создан в AD")
         updated_user = await user_service.user_repository.get_user_by_id(user_id)
         return user_to_response(updated_user)
             

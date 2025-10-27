@@ -177,12 +177,13 @@ class LDAPService:
             user_principal_name = self.get_user_principal_name(sam_account_name, user_data.get('company', ''))
             ldap_logger.info(f"  User Principal Name: {user_principal_name}")
             
-            if user_data.get('technical') == 'technical':
+            # Определяем тип пользователя: если is_engineer == 1, то технический
+            if user_data.get('is_engineer') == 1:
                 ou = 'OU=Технические логины,DC=central,DC=st-ing,DC=com'
-                ldap_logger.info(f"  Тип пользователя: Технический")
+                ldap_logger.info(f"  Тип пользователя: Технический (is_engineer=1)")
             else:
                 ou = self.find_ou(user_data.get('current_location_id', ''), user_data.get('department', ''))
-                ldap_logger.info(f"  Тип пользователя: Обычный")
+                ldap_logger.info(f"  Тип пользователя: Обычный (is_engineer={user_data.get('is_engineer', 'None')})")
             
             ldap_logger.info(f"  Организационная единица: {ou}")
             

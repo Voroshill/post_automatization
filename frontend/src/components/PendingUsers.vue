@@ -559,6 +559,8 @@ export default {
           
           errorDiv.textContent = errorMessage
           errorDiv.style.display = 'block'
+        } finally {
+          // Всегда возвращаем кнопку в исходное состояние
           submitBtn.disabled = false
           submitBtn.textContent = 'Создать пользователя'
         }

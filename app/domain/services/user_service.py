@@ -126,7 +126,7 @@ class UserService:
                 'work_phone': user.work_phone,
                 'current_location_id': user.current_location_id,
                 'boss_id': user.boss_id,
-                'technical': 'technical' if user.is_engineer else None
+                'is_engineer': user.is_engineer
             }
             
             ad_result = await self.ldap_service.create_user_in_ad(user_data)
