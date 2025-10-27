@@ -294,7 +294,32 @@ export default {
       }
     }
 
-    const showCreateModal = () => {
+    const loadOUs = async () => {
+      try {
+        const response = await fetch('/api/users/ous')
+        if (response.ok) {
+          const ous = await response.json()
+          const select = document.getElementById('ou_dn')
+          if (select) {
+            select.innerHTML = '<option value="">Выберите организационную единицу</option>'
+            ous.forEach(ou => {
+              const option = document.createElement('option')
+              option.value = ou
+              // Показываем только название OU (последняя часть DN)
+              const ouName = ou.split(',').find(part => part.startsWith('OU='))?.replace('OU=', '') || ou
+              option.textContent = ouName
+              select.appendChild(option)
+            })
+          }
+        } else {
+          console.error('Ошибка загрузки OU:', response.statusText)
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки OU:', error)
+      }
+    }
+
+    const showCreateModal = async () => {
       console.log('showCreateModal called!')
       
       // Сброс формы
@@ -320,6 +345,9 @@ export default {
         UploadDate: new Date().toISOString()
       }
       createError.value = ''
+      
+      // Загружаем список OU
+      await loadOUs()
       
       // Создаем модальное окно динамически и добавляем к body
       const modalHtml = `
@@ -425,6 +453,12 @@ export default {
                       <option value="1">Да</option>
                     </select>
                   </div>
+                  <div>
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Организационная единица *</label>
+                    <select id="ou_dn" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;" required>
+                      <option value="">Загрузка...</option>
+                    </select>
+                  </div>
                 </div>
                 <div id="createError" style="display: none; color: #dc3545; margin-top: 1rem; padding: 0.75rem; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 6px;"></div>
               </div>
@@ -508,12 +542,13 @@ export default {
           boss_id: document.getElementById('boss_id').value,
           BirthDate: document.getElementById('BirthDate').value,
           is_engeneer: document.getElementById('is_engeneer').value,
+          ou_dn: document.getElementById('ou_dn').value,
           o_id: '',
           UploadDate: new Date().toISOString()
         }
         
         // Проверяем обязательные поля
-        const required = ['unique', 'firstname', 'secondname', 'company', 'Department', 'Otdel', 'appointment', 'current_location_id']
+        const required = ['unique', 'firstname', 'secondname', 'company', 'Department', 'Otdel', 'appointment', 'current_location_id', 'ou_dn']
         const missing = required.filter(field => !formData[field])
         
         if (missing.length > 0) {

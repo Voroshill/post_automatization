@@ -148,7 +148,34 @@ class LDAPService:
         if any(obj in obj_name for obj in construction_objects):
             return f"OU={obj_name},OU=Строительные объекты,OU=Отдел управления проектами,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
         
-        return "OU=Пользователи,DC=central,DC=st-ing,DC=com"
+        # Если не найдена подходящая OU, возвращаем ошибку
+        raise ValueError(f"Не найдена подходящая организационная единица для объекта '{obj_name}' и отдела '{department}'")
+    
+    async def list_available_ous(self) -> List[str]:
+        """Получение списка всех доступных организационных единиц в AD"""
+        try:
+            conn = await self._get_connection()
+            
+            # Поиск всех OU в домене
+            conn.search(
+                'DC=central,DC=st-ing,DC=com',
+                '(objectClass=organizationalUnit)',
+                attributes=['distinguishedName']
+            )
+            
+            ous = []
+            for entry in conn.entries:
+                ous.append(entry.distinguishedName.value)
+            
+            ldap_logger.info(f"Найдено {len(ous)} организационных единиц:")
+            for ou in sorted(ous):
+                ldap_logger.info(f"  - {ou}")
+            
+            return ous
+            
+        except Exception as e:
+            ldap_logger.error(f"Ошибка получения списка OU: {e}")
+            return []
     
     async def create_user_in_ad(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
         """Создание пользователя в Active Directory через LDAP (точно как в PowerShell)"""
@@ -182,7 +209,13 @@ class LDAPService:
                 ou = 'OU=Технические логины,DC=central,DC=st-ing,DC=com'
                 ldap_logger.info(f"  Тип пользователя: Технический (is_engineer=1)")
             else:
-                ou = self.find_ou(user_data.get('current_location_id', ''), user_data.get('department', ''))
+                # Используем переданную OU или ищем по логике
+                if user_data.get('ou_dn'):
+                    ou = user_data.get('ou_dn')
+                    ldap_logger.info(f"  Используется переданная OU: {ou}")
+                else:
+                    ou = self.find_ou(user_data.get('current_location_id', ''), user_data.get('department', ''))
+                    ldap_logger.info(f"  OU найдена по логике: {ou}")
                 ldap_logger.info(f"  Тип пользователя: Обычный (is_engineer={user_data.get('is_engineer', 'None')})")
             
             ldap_logger.info(f"  Организационная единица: {ou}")

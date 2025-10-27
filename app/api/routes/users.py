@@ -126,6 +126,31 @@ async def create_user_manually(
         )
 
 
+@router.get("/ous", response_model=List[str])
+async def get_available_ous(
+    user_service: UserService = Depends(get_user_service)
+):
+    """
+    Получение списка доступных организационных единиц (OU) из Active Directory
+    """
+    try:
+        api_logger.info("Запрос списка доступных OU")
+        ous = await user_service.ldap_service.list_available_ous()
+        api_logger.info(f"Получено {len(ous)} OU")
+        return ous
+    except Exception as e:
+        api_logger.error(f"Ошибка получения списка OU: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "error_type": "ldap_error",
+                "message": "Ошибка получения списка организационных единиц",
+                "details": str(e)
+            }
+        )
+
+
 @router.get("/pending", response_model=CursorPaginatedUsersResponse)
 async def get_pending_users(
     cursor: Optional[str] = Query(None, description="Курсор для пагинации"),
