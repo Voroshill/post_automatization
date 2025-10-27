@@ -345,39 +345,42 @@ export default {
         }
       }
       
-      // Валидация локации и департамента
+      // Валидация локации, департамента и отдела
       const location = formData.current_location_id.toLowerCase()
       const department = formData.Department.toLowerCase()
+      const office = formData.Otdel.toLowerCase()
       
       // Проверки для Медового
-      if (location.toLowerCase().includes('медовый')) {
-        const validDepartments = [
-          'информац', 'кадро', 'персона', 'управленческ', 'проектир', 
-          'ендерны', 'закупок', 'логистик', 'снабже', 'труд', 
-          'пто', 'метный', 'ланово', 'ухгалтери', 'азначе', 
-          'ридически', 'дминистративны'
-        ]
+      if (location.includes('медовый')) {
+        const validDepartments = ['технический', 'коммерческий', 'финансовый', 'обеспечения', 'развития', 'юридический']
         if (!validDepartments.some(dept => department.includes(dept))) {
           errors.push('Для локации "Медовый" выберите подходящий департамент')
         }
       }
       
       // Проверки для Лобни
-      if (location.toLowerCase().includes('лобня')) {
-        if (!department.includes('логистик')) {
+      if (location.includes('лобня')) {
+        if (!department.includes('коммерческий')) {
+          errors.push('Для локации "Лобня" доступен только коммерческий департамент')
+        }
+        if (!office.includes('логистик')) {
           errors.push('Для локации "Лобня" доступен только отдел логистики')
         }
       }
       
       // Проверки для Трёхпрудного
-      if (location.toLowerCase().includes('прудный')) {
-        // Трёхпрудный имеет фиксированную OU, департамент не важен
+      if (location.includes('прудный')) {
+        if (!department.includes('технический')) {
+          errors.push('Для локации "Трёхпрудный" доступен только технический департамент')
+        }
       }
       
       // Проверки для строительных объектов
       const constructionObjects = ['емеров', 'амчатк', 'гнитогор', 'инько', 'ер к32', 'авидо', 'ктафар', 'ухарев', 'алент', 'рофлот', 'on']
       if (constructionObjects.some(obj => location.includes(obj))) {
-        // Строительные объекты имеют фиксированную OU
+        if (!department.includes('технический')) {
+          errors.push('Для строительных объектов доступен только технический департамент')
+        }
       }
       
       return errors
@@ -440,9 +443,24 @@ export default {
     }
 
     const loadDepartments = () => {
+      const departments = [
+        'Технический департамент',
+        'Коммерческий департамент', 
+        'Финансовый департамент',
+        'Департамент обеспечения',
+        'Департамент развития',
+        'Юридический департамент'
+      ]
+      
       const select = document.getElementById('Department')
       if (select) {
-        select.innerHTML = '<option value="">Сначала выберите локацию</option>'
+        select.innerHTML = '<option value="">Выберите департамент</option>'
+        departments.forEach(dept => {
+          const option = document.createElement('option')
+          option.value = dept
+          option.textContent = dept
+          select.appendChild(option)
+        })
       }
     }
 
@@ -502,53 +520,56 @@ export default {
     }
 
     const filterDepartmentsByLocation = (location) => {
-      const allDepartments = [
-        'Отдел информационных технологий',
-        'Отдел кадров',
-        'Отдел персонала',
-        'Отдел управленческого учета',
-        'Отдел проектирования',
-        'Тендерный отдел',
-        'Отдел закупок',
-        'Отдел логистики и складского учета',
-        'Отдел снабжения',
-        'Отдел охраны труда',
-        'Отдел ПТО',
-        'Сметный отдел',
-        'Планово экономический отдел',
-        'Бухгалтерия',
-        'Казначейство',
-        'Юридический отдел',
-        'Административный отдел'
-      ]
-      
-      let allowedDepartments = []
-      
-      if (location.toLowerCase().includes('медовый')) {
-        allowedDepartments = allDepartments // Все департаменты доступны для Медового
-      } else if (location.toLowerCase().includes('лобня')) {
-        allowedDepartments = ['Отдел логистики и складского учета'] // Только логистика для Лобни
-      } else if (location.toLowerCase().includes('прудный')) {
-        allowedDepartments = allDepartments // Все департаменты для Трёхпрудного (фиксированная OU)
-      } else if (['кемерово', 'камчатка', 'магнитогорск', 'инько', 'кер к32', 'авидо', 'актафар', 'ухарев', 'алент', 'рофлот', 'on'].some(obj => location.toLowerCase().includes(obj))) {
-        allowedDepartments = allDepartments // Все департаменты для строительных объектов (фиксированная OU)
-      } else {
-        allowedDepartments = [] // Неизвестная локация - нет доступных департаментов
+      // Все департаменты доступны для всех локаций
+      loadDepartments()
+    }
+
+    const filterOfficesByDepartment = (department) => {
+      const allOffices = {
+        'Технический департамент': [
+          'Отдел ПТО',
+          'Сметный отдел',
+          'Отдел охраны труда'
+        ],
+        'Коммерческий департамент': [
+          'Отдел закупок',
+          'Отдел логистики и складского учета',
+          'Отдел снабжения'
+        ],
+        'Финансовый департамент': [
+          'Планово экономический отдел',
+          'Бухгалтерия',
+          'Казначейство'
+        ],
+        'Департамент обеспечения': [
+          'Отдел информационных технологий',
+          'Отдел кадров',
+          'Отдел персонала',
+          'Отдел управленческого учета',
+          'Административный отдел'
+        ],
+        'Департамент развития': [
+          'Отдел проектирования',
+          'Тендерный отдел'
+        ],
+        'Юридический департамент': [
+          'Юридический отдел'
+        ]
       }
       
-      const select = document.getElementById('Department')
+      const select = document.getElementById('Otdel')
       if (select) {
-        select.innerHTML = '<option value="">Выберите департамент</option>'
-        allowedDepartments.forEach(dept => {
-          const option = document.createElement('option')
-          option.value = dept
-          option.textContent = dept
-          select.appendChild(option)
-        })
+        select.innerHTML = '<option value="">Выберите отдел</option>'
         
-        // Если нет доступных департаментов, показываем сообщение
-        if (allowedDepartments.length === 0) {
-          select.innerHTML = '<option value="">Нет доступных департаментов для этой локации</option>'
+        if (department && allOffices[department]) {
+          allOffices[department].forEach(office => {
+            const option = document.createElement('option')
+            option.value = office
+            option.textContent = office
+            select.appendChild(option)
+          })
+        } else {
+          select.innerHTML = '<option value="">Сначала выберите департамент</option>'
         }
       }
     }
@@ -661,7 +682,9 @@ export default {
                   </div>
                   <div>
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Отдел *</label>
-                    <input type="text" id="Otdel" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;" required>
+                    <select id="Otdel" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;" required>
+                      <option value="">Сначала выберите департамент</option>
+                    </select>
                   </div>
                   <div>
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Должность *</label>
@@ -747,7 +770,11 @@ export default {
           const field = document.getElementById(fieldId)
           if (field) {
             if (fieldId === 'Department') {
-              field.addEventListener('change', validateCurrentForm)
+              field.addEventListener('change', () => {
+                const department = field.value
+                filterOfficesByDepartment(department)
+                validateCurrentForm()
+              })
             } else if (fieldId === 'current_location_id') {
               field.addEventListener('change', () => {
                 const location = field.value
