@@ -350,7 +350,7 @@ export default {
       const department = formData.Department.toLowerCase()
       
       // Проверки для Медового
-      if (location.includes('медовый')) {
+      if (location.toLowerCase().includes('медовый')) {
         const validDepartments = [
           'информац', 'кадро', 'персона', 'управленческ', 'проектир', 
           'ендерны', 'закупок', 'логистик', 'снабже', 'труд', 
@@ -363,14 +363,14 @@ export default {
       }
       
       // Проверки для Лобни
-      if (location.includes('лобня')) {
+      if (location.toLowerCase().includes('лобня')) {
         if (!department.includes('логистик')) {
           errors.push('Для локации "Лобня" доступен только отдел логистики')
         }
       }
       
       // Проверки для Трёхпрудного
-      if (location.includes('прудный')) {
+      if (location.toLowerCase().includes('прудный')) {
         // Трёхпрудный имеет фиксированную OU, департамент не важен
       }
       

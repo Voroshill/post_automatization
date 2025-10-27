@@ -129,7 +129,7 @@ class LDAPService:
                 return "OU=Отдел снабжения,OU=Коммерческий департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
             elif 'труд' in department.lower():
                 return "OU=Отдел охраны труда,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
-            elif 'ПТО' in department.upper():
+            elif 'пто' in department.lower():
                 return "OU=Отдел ПТО,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
             elif 'метный' in department.lower():
                 return "OU=Сметный отдел,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
@@ -145,7 +145,7 @@ class LDAPService:
                 return "OU=Административный отдел,OU=Департамент обеспечения,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
         
         construction_objects = ['емеров', 'амчатк', 'гнитогор', 'инько', 'ер К32', 'авидо', 'ктафар', 'ухарев', 'алент', 'рофлот', 'ON']
-        if any(obj in obj_name for obj in construction_objects):
+        if any(obj in obj_name.lower() for obj in construction_objects):
             return f"OU={obj_name},OU=Строительные объекты,OU=Отдел управления проектами,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
         
         # Если не найдена подходящая OU, возвращаем ошибку (точно как в PowerShell)
@@ -307,17 +307,26 @@ class LDAPService:
                 
                 # Подготавливаем атрибуты для обновления (исключаем неизменяемые атрибуты)
                 immutable_attrs = ['objectClass', 'userAccountControl', 'sAMAccountName', 'userPrincipalName']
-                update_attributes = {}
+                
+                # Используем правильный формат для LDAP modify
+                changes = {}
                 for attr_name, attr_value in validated_attributes.items():
-                    if attr_name not in immutable_attrs and attr_value:
-                        update_attributes[attr_name] = attr_value
+                    if (attr_name not in immutable_attrs and 
+                        attr_value and 
+                        str(attr_value).strip() and
+                        attr_name not in ['mail']):  # Исключаем mail, так как он может конфликтовать с UPN
+                        changes[attr_name] = [(MODIFY_REPLACE, [str(attr_value).strip()])]
                 
-                ldap_logger.info(f"  Атрибуты для обновления: {len(update_attributes)} атрибутов")
-                for attr_name, attr_value in update_attributes.items():
-                    ldap_logger.info(f"    {attr_name}: {attr_value}")
+                ldap_logger.info(f"  Атрибуты для обновления: {len(changes)} атрибутов")
+                for attr_name, change_list in changes.items():
+                    ldap_logger.info(f"    {attr_name}: {change_list[0][1][0]}")
                 
-                # Выполняем обновление атрибутов
-                success = conn.modify(user_dn, update_attributes)
+                # Выполняем обновление атрибутов с правильным форматом
+                if changes:
+                    success = conn.modify(user_dn, changes)
+                else:
+                    ldap_logger.info("  Нет атрибутов для обновления - пользователь уже актуален")
+                    success = True
                 ldap_logger.info(f"  Результат обновления: {success}")
                 ldap_logger.info(f"  Код результата: {conn.result.get('result', 'N/A')}")
                 ldap_logger.info(f"  Описание: {conn.result.get('description', 'N/A')}")
