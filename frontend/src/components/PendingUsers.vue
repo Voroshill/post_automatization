@@ -440,35 +440,9 @@ export default {
     }
 
     const loadDepartments = () => {
-      const departments = [
-        'Отдел информационных технологий',
-        'Отдел кадров',
-        'Отдел персонала',
-        'Отдел управленческого учета',
-        'Отдел проектирования',
-        'Тендерный отдел',
-        'Отдел закупок',
-        'Отдел логистики и складского учета',
-        'Отдел снабжения',
-        'Отдел охраны труда',
-        'Отдел ПТО',
-        'Сметный отдел',
-        'Планово экономический отдел',
-        'Бухгалтерия',
-        'Казначейство',
-        'Юридический отдел',
-        'Административный отдел'
-      ]
-      
       const select = document.getElementById('Department')
       if (select) {
-        select.innerHTML = '<option value="">Выберите департамент</option>'
-        departments.forEach(dept => {
-          const option = document.createElement('option')
-          option.value = dept
-          option.textContent = dept
-          select.appendChild(option)
-        })
+        select.innerHTML = '<option value="">Сначала выберите локацию</option>'
       }
     }
 
@@ -494,6 +468,88 @@ export default {
         }
       } catch (error) {
         console.error('Ошибка загрузки OU:', error)
+      }
+    }
+
+    const loadLocations = () => {
+      const locations = [
+        'Медовый',
+        'Лобня', 
+        'Трёхпрудный',
+        'Кемерово',
+        'Камчатка',
+        'Магнитогорск',
+        'Инько',
+        'Кер К32',
+        'Авидо',
+        'Актафар',
+        'Ухарев',
+        'Алент',
+        'Рофлот',
+        'ON'
+      ]
+      
+      const select = document.getElementById('current_location_id')
+      if (select) {
+        select.innerHTML = '<option value="">Выберите локацию</option>'
+        locations.forEach(location => {
+          const option = document.createElement('option')
+          option.value = location
+          option.textContent = location
+          select.appendChild(option)
+        })
+      }
+    }
+
+    const filterDepartmentsByLocation = (location) => {
+      const allDepartments = [
+        'Отдел информационных технологий',
+        'Отдел кадров',
+        'Отдел персонала',
+        'Отдел управленческого учета',
+        'Отдел проектирования',
+        'Тендерный отдел',
+        'Отдел закупок',
+        'Отдел логистики и складского учета',
+        'Отдел снабжения',
+        'Отдел охраны труда',
+        'Отдел ПТО',
+        'Сметный отдел',
+        'Планово экономический отдел',
+        'Бухгалтерия',
+        'Казначейство',
+        'Юридический отдел',
+        'Административный отдел'
+      ]
+      
+      let allowedDepartments = []
+      
+      if (location.toLowerCase().includes('медовый')) {
+        allowedDepartments = allDepartments // Все департаменты доступны для Медового
+      } else if (location.toLowerCase().includes('лобня')) {
+        allowedDepartments = ['Отдел логистики и складского учета'] // Только логистика для Лобни
+      } else if (location.toLowerCase().includes('прудный')) {
+        allowedDepartments = allDepartments // Все департаменты для Трёхпрудного (фиксированная OU)
+      } else if (['кемерово', 'камчатка', 'магнитогорск', 'инько', 'кер к32', 'авидо', 'актафар', 'ухарев', 'алент', 'рофлот', 'on'].some(obj => location.toLowerCase().includes(obj))) {
+        allowedDepartments = allDepartments // Все департаменты для строительных объектов (фиксированная OU)
+      } else {
+        allowedDepartments = [] // Неизвестная локация - нет доступных департаментов
+      }
+      
+      const select = document.getElementById('Department')
+      if (select) {
+        select.innerHTML = '<option value="">Выберите департамент</option>'
+        allowedDepartments.forEach(dept => {
+          const option = document.createElement('option')
+          option.value = dept
+          option.textContent = dept
+          select.appendChild(option)
+        })
+        
+        // Если нет доступных департаментов, показываем сообщение
+        if (allowedDepartments.length === 0) {
+          select.innerHTML = '<option value="">Нет доступных департаментов для этой локации</option>'
+        }
       }
     }
 
@@ -591,6 +647,13 @@ export default {
                     <small style="color: #6c757d; font-size: 0.875rem;">Должна содержать: STI, Строй, Техно, Инженеринг, DtTermo или ДТ</small>
                   </div>
                   <div>
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Локация *</label>
+                    <select id="current_location_id" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;" required>
+                      <option value="">Загрузка...</option>
+                    </select>
+                    <small style="color: #6c757d; font-size: 0.875rem;">Выберите локацию из списка</small>
+                  </div>
+                  <div>
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Департамент *</label>
                     <select id="Department" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;" required>
                       <option value="">Загрузка...</option>
@@ -613,11 +676,6 @@ export default {
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Рабочий телефон</label>
                     <input type="tel" id="WorkPhone" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;">
                     <small style="color: #6c757d; font-size: 0.875rem;">Формат: +7 (999) 123-45-67 или 8 999 123 45 67</small>
-                  </div>
-                  <div>
-                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Локация *</label>
-                    <input type="text" id="current_location_id" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;" required>
-                    <small style="color: #6c757d; font-size: 0.875rem;">Примеры: Медовый, Лобня, Трёхпрудный, Кемерово, Камчатка, Магнитогорск, etc.</small>
                   </div>
                   <div>
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">ID руководителя</label>
@@ -674,8 +732,9 @@ export default {
       document.body.insertAdjacentHTML('beforeend', modalHtml)
       document.body.style.overflow = 'hidden'
       
-      // Загружаем список департаментов после создания модального окна
+      // Загружаем списки департаментов и локаций после создания модального окна
       loadDepartments()
+      loadLocations()
       
       // Добавляем валидацию при изменении полей
       setTimeout(() => {
@@ -689,6 +748,12 @@ export default {
           if (field) {
             if (fieldId === 'Department') {
               field.addEventListener('change', validateCurrentForm)
+            } else if (fieldId === 'current_location_id') {
+              field.addEventListener('change', () => {
+                const location = field.value
+                filterDepartmentsByLocation(location)
+                validateCurrentForm()
+              })
             } else {
               field.addEventListener('input', validateCurrentForm)
             }
