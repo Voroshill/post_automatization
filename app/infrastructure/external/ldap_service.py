@@ -148,7 +148,7 @@ class LDAPService:
         if any(obj in obj_name for obj in construction_objects):
             return f"OU={obj_name},OU=Строительные объекты,OU=Отдел управления проектами,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
         
-        # Если не найдена подходящая OU, возвращаем ошибку
+        # Если не найдена подходящая OU, возвращаем ошибку (точно как в PowerShell)
         raise ValueError(f"Не найдена подходящая организационная единица для объекта '{obj_name}' и отдела '{department}'")
     
     async def list_available_ous(self) -> List[str]:

@@ -297,12 +297,52 @@ export default {
     const validateFormData = (formData) => {
       const errors = []
       
+      // Валидация обязательных полей
+      if (!formData.firstname || formData.firstname.trim().length < 2) {
+        errors.push('Имя должно содержать минимум 2 символа')
+      }
+      if (!formData.secondname || formData.secondname.trim().length < 2) {
+        errors.push('Фамилия должна содержать минимум 2 символа')
+      }
+      if (!formData.unique || formData.unique.trim().length === 0) {
+        errors.push('Табельный номер обязателен')
+      }
+      
       // Валидация компании
       const company = formData.company.toLowerCase()
       if (!company.includes('sti') && !company.includes('строй') && 
           !company.includes('техно') && !company.includes('инженеринг') &&
           !company.includes('dttermo') && !company.includes('дт')) {
         errors.push('Компания должна содержать: STI, Строй, Техно, Инженеринг, DtTermo или ДТ')
+      }
+      
+      // Валидация телефонов
+      if (formData.MobilePhone && formData.MobilePhone.trim()) {
+        const phoneRegex = /^[\+]?[0-9\s\-\(\)]{10,15}$/
+        if (!phoneRegex.test(formData.MobilePhone.trim())) {
+          errors.push('Некорректный формат мобильного телефона')
+        }
+      }
+      if (formData.WorkPhone && formData.WorkPhone.trim()) {
+        const phoneRegex = /^[\+]?[0-9\s\-\(\)]{10,15}$/
+        if (!phoneRegex.test(formData.WorkPhone.trim())) {
+          errors.push('Некорректный формат рабочего телефона')
+        }
+      }
+      
+      // Валидация даты рождения
+      if (formData.BirthDate && formData.BirthDate.trim()) {
+        const birthDate = new Date(formData.BirthDate)
+        const today = new Date()
+        const age = today.getFullYear() - birthDate.getFullYear()
+        
+        if (birthDate > today) {
+          errors.push('Дата рождения не может быть в будущем')
+        } else if (age < 16) {
+          errors.push('Возраст должен быть не менее 16 лет')
+        } else if (age > 80) {
+          errors.push('Возраст не должен превышать 80 лет')
+        }
       }
       
       // Валидация локации и департамента
@@ -345,13 +385,22 @@ export default {
 
     const validateCurrentForm = () => {
       const formData = {
+        unique: document.getElementById('unique')?.value || '',
+        firstname: document.getElementById('firstname')?.value || '',
+        secondname: document.getElementById('secondname')?.value || '',
         company: document.getElementById('company')?.value || '',
+        Department: document.getElementById('Department')?.value || '',
+        Otdel: document.getElementById('Otdel')?.value || '',
+        appointment: document.getElementById('appointment')?.value || '',
         current_location_id: document.getElementById('current_location_id')?.value || '',
-        Department: document.getElementById('Department')?.value || ''
+        MobilePhone: document.getElementById('MobilePhone')?.value || '',
+        WorkPhone: document.getElementById('WorkPhone')?.value || '',
+        BirthDate: document.getElementById('BirthDate')?.value || ''
       }
       
       const errors = validateFormData(formData)
       const errorDiv = document.getElementById('createError')
+      const submitBtn = document.getElementById('submitBtn')
       
       if (errors.length > 0) {
         errorDiv.textContent = errors.join('; ')
@@ -359,8 +408,34 @@ export default {
         errorDiv.style.backgroundColor = '#fff3cd'
         errorDiv.style.borderColor = '#ffeaa7'
         errorDiv.style.color = '#856404'
+        
+        // Блокируем кнопку при ошибках
+        if (submitBtn) {
+          submitBtn.disabled = true
+          submitBtn.style.backgroundColor = '#6c757d'
+          submitBtn.style.cursor = 'not-allowed'
+        }
       } else {
         errorDiv.style.display = 'none'
+        
+        // Проверяем обязательные поля
+        const requiredFields = ['unique', 'firstname', 'secondname', 'company', 'Department', 'Otdel', 'appointment', 'current_location_id']
+        const allRequiredFilled = requiredFields.every(field => {
+          const value = formData[field]
+          return value && value.trim().length > 0
+        })
+        
+        // Активируем кнопку только если все обязательные поля заполнены и нет ошибок валидации
+        if (submitBtn) {
+          submitBtn.disabled = !allRequiredFilled
+          if (allRequiredFilled) {
+            submitBtn.style.backgroundColor = '#007bff'
+            submitBtn.style.cursor = 'pointer'
+          } else {
+            submitBtn.style.backgroundColor = '#6c757d'
+            submitBtn.style.cursor = 'not-allowed'
+          }
+        }
       }
     }
 
@@ -532,10 +607,12 @@ export default {
                   <div>
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Мобильный телефон</label>
                     <input type="tel" id="MobilePhone" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;">
+                    <small style="color: #6c757d; font-size: 0.875rem;">Формат: +7 (999) 123-45-67 или 8 999 123 45 67</small>
                   </div>
                   <div>
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Рабочий телефон</label>
                     <input type="tel" id="WorkPhone" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;">
+                    <small style="color: #6c757d; font-size: 0.875rem;">Формат: +7 (999) 123-45-67 или 8 999 123 45 67</small>
                   </div>
                   <div>
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Локация *</label>
@@ -549,6 +626,7 @@ export default {
                   <div>
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Дата рождения</label>
                     <input type="date" id="BirthDate" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;">
+                    <small style="color: #6c757d; font-size: 0.875rem;">Возраст должен быть от 16 до 80 лет</small>
                   </div>
                   <div>
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Инженер</label>
@@ -578,14 +656,15 @@ export default {
                 cursor: pointer;
                 font-weight: 600;
               ">Отмена</button>
-              <button onclick="submitCreateForm()" id="submitBtn" style="
+              <button onclick="submitCreateForm()" id="submitBtn" disabled style="
                 padding: 0.75rem 1.5rem;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                background: #6c757d;
                 color: white;
                 border: none;
                 border-radius: 10px;
-                cursor: pointer;
+                cursor: not-allowed;
                 font-weight: 600;
+                opacity: 0.6;
               ">Создать пользователя</button>
             </div>
           </div>
@@ -600,19 +679,24 @@ export default {
       
       // Добавляем валидацию при изменении полей
       setTimeout(() => {
-        const locationField = document.getElementById('current_location_id')
-        const departmentField = document.getElementById('Department')
-        const companyField = document.getElementById('company')
+        const fields = [
+          'unique', 'firstname', 'secondname', 'company', 'Department', 'Otdel', 'appointment',
+          'current_location_id', 'MobilePhone', 'WorkPhone', 'BirthDate'
+        ]
         
-        if (locationField) {
-          locationField.addEventListener('input', validateCurrentForm)
-        }
-        if (departmentField) {
-          departmentField.addEventListener('change', validateCurrentForm)
-        }
-        if (companyField) {
-          companyField.addEventListener('input', validateCurrentForm)
-        }
+        fields.forEach(fieldId => {
+          const field = document.getElementById(fieldId)
+          if (field) {
+            if (fieldId === 'Department') {
+              field.addEventListener('change', validateCurrentForm)
+            } else {
+              field.addEventListener('input', validateCurrentForm)
+            }
+          }
+        })
+        
+        // Инициализируем состояние кнопки при загрузке
+        validateCurrentForm()
       }, 100)
       
       // Добавляем глобальные функции для работы с модальным окном
@@ -643,6 +727,11 @@ export default {
       window.submitCreateForm = async () => {
         const submitBtn = document.getElementById('submitBtn')
         const errorDiv = document.getElementById('createError')
+        
+        // Проверяем, не заблокирована ли кнопка
+        if (submitBtn.disabled) {
+          return
+        }
         
         // Собираем данные формы
         const formData = {
