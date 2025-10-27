@@ -99,57 +99,51 @@ class LDAPService:
         else:
             return f"{sam_account_name}@st-ing.com"
     
-    def find_ou(self, obj_name: str, department: str, office: str = '') -> str:
+    def find_ou(self, obj_name: str, department: str) -> str:
         """Определение OU в Active Directory (точно как в PowerShell)"""
         if 'прудный' in obj_name.lower():
             return "OU=Доп. офис Трёхпрудный,OU=Отдел управления проектами,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
         
         if 'лобня' in obj_name.lower():
-            if 'логистик' in office.lower():
+            if 'логистик' in department.lower():
                 return "OU=Отдел логистики и складского учета,OU=Коммерческий департамент,OU=DtTermo,DC=central,DC=st-ing,DC=com"
         
         if 'медовый' in obj_name.lower():
-            # Используем комбинацию департамента и отдела для точного определения OU
-            if 'технический' in department.lower():
-                if 'пто' in office.lower():
-                    return "OU=Отдел ПТО,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
-                elif 'метный' in office.lower():
-                    return "OU=Сметный отдел,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
-                elif 'труд' in office.lower():
-                    return "OU=Отдел охраны труда,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
-            elif 'коммерческий' in department.lower():
-                if 'закупок' in office.lower():
-                    return "OU=Отдел закупок,OU=Коммерческий департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
-                elif 'логистик' in office.lower():
-                    return "OU=Отдел логистики и складского учета,OU=Коммерческий департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
-                elif 'снабже' in office.lower():
-                    return "OU=Отдел снабжения,OU=Коммерческий департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
-            elif 'финансовый' in department.lower():
-                if 'планово' in office.lower():
-                    return "OU=Планово экономический отдел,OU=Финансовый департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
-                elif 'ухгалтери' in office.lower():
-                    return "OU=Бухгалтерия,OU=Финансовый департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
-                elif 'азначе' in office.lower():
-                    return "OU=Казначейство,OU=Финансовый департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
-            elif 'обеспечения' in department.lower():
-                if 'информац' in office.lower():
-                    return "OU=Отдел информационных технологий,OU=Департамент обеспечения,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
-                elif 'кадро' in office.lower():
-                    return "OU=Отдел кадров,OU=Департамент обеспечения,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
-                elif 'персона' in office.lower():
-                    return "OU=Отдел персонала,OU=Департамент обеспечения,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
-                elif 'управленческ' in office.lower():
-                    return "OU=Отдел управленческого учета,OU=Департамент обеспечения,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
-                elif 'дминистративны' in office.lower():
-                    return "OU=Административный отдел,OU=Департамент обеспечения,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
-            elif 'развития' in department.lower():
-                if 'проектир' in office.lower():
-                    return "OU=Отдел проектирования,OU=Департамент развития,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
-                elif 'ендерны' in office.lower():
-                    return "OU=Тендерный отдел,OU=Департамент развития,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
-            elif 'юридический' in department.lower():
-                if 'ридически' in office.lower():
-                    return "OU=Юридический отдел,OU=Юридический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            # Используем только название отдела (как в PowerShell)
+            if 'информац' in department.lower():
+                return "OU=Отдел информационных технологий,OU=Департамент обеспечения,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            elif 'кадро' in department.lower():
+                return "OU=Отдел кадров,OU=Департамент обеспечения,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            elif 'персона' in department.lower():
+                return "OU=Отдел персонала,OU=Департамент обеспечения,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            elif 'управленческ' in department.lower():
+                return "OU=Отдел управленческого учета,OU=Департамент обеспечения,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            elif 'проектир' in department.lower():
+                return "OU=Отдел проектирования,OU=Департамент развития,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            elif 'ендерны' in department.lower():
+                return "OU=Тендерный отдел,OU=Департамент развития,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            elif 'закупок' in department.lower():
+                return "OU=Отдел закупок,OU=Коммерческий департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            elif 'логистик' in department.lower():
+                return "OU=Отдел логистики и складского учета,OU=Коммерческий департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            elif 'снабже' in department.lower():
+                return "OU=Отдел снабжения,OU=Коммерческий департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            elif 'труд' in department.lower():
+                return "OU=Отдел охраны труда,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            elif 'пто' in department.lower():
+                return "OU=Отдел ПТО,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            elif 'метный' in department.lower():
+                return "OU=Сметный отдел,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            elif 'планово' in department.lower():
+                return "OU=Планово экономический отдел,OU=Финансовый департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            elif 'ухгалтери' in department.lower():
+                return "OU=Бухгалтерия,OU=Финансовый департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            elif 'азначе' in department.lower():
+                return "OU=Казначейство,OU=Финансовый департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            elif 'ридически' in department.lower():
+                return "OU=Юридический отдел,OU=Юридический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            elif 'дминистративны' in department.lower():
+                return "OU=Административный отдел,OU=Департамент обеспечения,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
         
         construction_objects = ['емеров', 'амчатк', 'гнитогор', 'инько', 'ер К32', 'авидо', 'ктафар', 'ухарев', 'алент', 'рофлот', 'ON']
         if any(obj in obj_name.lower() for obj in construction_objects):
@@ -157,7 +151,7 @@ class LDAPService:
             return f"OU={obj_name},OU=Строительные объекты,OU=Отдел управления проектами,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
         
         # Если не найдена подходящая OU, возвращаем ошибку (точно как в PowerShell)
-        raise ValueError(f"Не найдена подходящая организационная единица для объекта '{obj_name}', департамента '{department}' и отдела '{office}'")
+        raise ValueError(f"Не найдена подходящая организационная единица для объекта '{obj_name}' и отдела '{department}'")
     
     async def list_available_ous(self) -> List[str]:
         """Получение списка всех доступных организационных единиц в AD"""
@@ -193,7 +187,9 @@ class LDAPService:
             ldap_logger.info(f"Имя: {user_data.get('firstname', '')}")
             ldap_logger.info(f"Фамилия: {user_data.get('secondname', '')}")
             ldap_logger.info(f"Компания: {user_data.get('company', '')}")
-            ldap_logger.info(f"Отдел: {user_data.get('department', '')}")
+            ldap_logger.info(f"Департамент: {user_data.get('department', '')}")
+            ldap_logger.info(f"Отдел: {user_data.get('otdel', '')}")
+            ldap_logger.info(f"Локация: {user_data.get('current_location_id', '')}")
             
             ldap_logger.info(f"Получение LDAP подключения...")
             conn = await self._get_connection()
@@ -220,8 +216,7 @@ class LDAPService:
                 # Определяем OU по логике из PowerShell скрипта
                 ou = self.find_ou(
                     user_data.get('current_location_id', ''), 
-                    user_data.get('department', ''), 
-                    user_data.get('otdel', '')
+                    user_data.get('department', '')
                 )
                 ldap_logger.info(f"  Тип пользователя: Обычный (is_engineer={user_data.get('is_engineer', 'None')})")
                 ldap_logger.info(f"  OU найдена по логике: {ou}")

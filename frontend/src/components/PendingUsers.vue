@@ -307,6 +307,18 @@ export default {
       if (!formData.unique || formData.unique.trim().length === 0) {
         errors.push('Табельный номер обязателен')
       }
+      if (!formData.Department || formData.Department.trim().length === 0) {
+        errors.push('Департамент обязателен')
+      }
+      if (!formData.Otdel || formData.Otdel.trim().length === 0) {
+        errors.push('Отдел обязателен')
+      }
+      if (!formData.appointment || formData.appointment.trim().length === 0) {
+        errors.push('Должность обязательна')
+      }
+      if (!formData.current_location_id || formData.current_location_id.trim().length === 0) {
+        errors.push('Локация обязательна')
+      }
       
       // Валидация компании
       const company = formData.company.toLowerCase()

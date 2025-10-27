@@ -121,7 +121,7 @@ class UserService:
                 'secondname': user.secondname,
                 'thirdname': user.thirdname,
                 'company': user.company,
-                'department': user.department,
+                'department': user.otdel,  # Передаем отдел как department (как в PowerShell)
                 'appointment': user.appointment,
                 'work_phone': user.work_phone,
                 'current_location_id': user.current_location_id,
