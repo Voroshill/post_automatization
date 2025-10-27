@@ -27,11 +27,15 @@ class ExchangeService:
     async def create_mailbox(self, sam_account_name: str, user_principal_name: str) -> Dict[str, Any]:
         """Создание почтового ящика Exchange через WinRM (точно как в PS.ps1)"""
         try:
-            exchange_logger.info(f"Создание почтового ящика Exchange для {sam_account_name}")
-            
+            exchange_logger.info(f"=== СОЗДАНИЕ ПОЧТОВОГО ЯЩИКА EXCHANGE ===")
+            exchange_logger.info(f"Пользователь: {sam_account_name}")
+            exchange_logger.info(f"UPN: {user_principal_name}")
+            exchange_logger.info(f"Exchange сервер: {self.exchange_server}")
+            exchange_logger.info(f"База данных: {self.exchange_database}")
 
             # Если база не указана, не передаем параметр -Database (пусть решает Exchange)
             database_arg = f" -Database \"{self.exchange_database}\"" if (self.exchange_database and len(self.exchange_database.strip())>0) else ""
+            exchange_logger.info(f"Параметр базы данных: '{database_arg}'")
 
             script = f"""
             $ErrorActionPreference = 'Stop'
@@ -81,18 +85,66 @@ class ExchangeService:
             }}
             """
 
+            exchange_logger.info(f"Отправка PowerShell скрипта на Exchange сервер...")
             result = await self.winrm_service.execute_powershell(script)
-            exchange_logger.info(f"Exchange PowerShell result: {result}")
-            return result
+            
+            exchange_logger.info(f"Результат выполнения Exchange PowerShell:")
+            exchange_logger.info(f"  Успех: {result.get('success', False)}")
+            exchange_logger.info(f"  Код статуса: {result.get('status_code', 'N/A')}")
+            
+            if result.get('stdout'):
+                exchange_logger.info(f"  STDOUT: {result['stdout'][:300]}{'...' if len(result['stdout']) > 300 else ''}")
+            if result.get('stderr'):
+                exchange_logger.warning(f"  STDERR: {result['stderr'][:300]}{'...' if len(result['stderr']) > 300 else ''}")
+            
+            if result.get('success'):
+                exchange_logger.info(f"✅ Почтовый ящик Exchange создан успешно для {sam_account_name}")
+                return result
+            else:
+                # Анализируем ошибку Exchange
+                stderr = result.get('stderr', '')
+                stdout = result.get('stdout', '')
+                status_code = result.get('status_code', 0)
+                
+                # Определяем тип ошибки по содержимому
+                if 'Failed to connect to Exchange PowerShell' in stderr:
+                    error_msg = "Не удалось подключиться к Exchange PowerShell. Проверьте доступность сервера Exchange."
+                elif 'Access is denied' in stderr or 'Unauthorized' in stderr:
+                    error_msg = "Недостаточно прав для создания почтового ящика. Проверьте права пользователя."
+                elif 'Mailbox already exists' in stdout:
+                    error_msg = "Почтовый ящик уже существует для этого пользователя."
+                elif 'The user account does not exist' in stderr:
+                    error_msg = "Учетная запись пользователя не найдена в Active Directory."
+                elif 'Database' in stderr and 'not found' in stderr:
+                    error_msg = "База данных Exchange не найдена. Проверьте настройки базы данных."
+                elif status_code != 0:
+                    error_msg = f"Ошибка выполнения PowerShell (код {status_code}): {stderr[:200]}"
+                else:
+                    error_msg = f"Неизвестная ошибка Exchange: {stderr[:200]}"
+                
+                exchange_logger.error(f"❌ {error_msg}")
+                
+                return {
+                    "success": False, 
+                    "stderr": error_msg,
+                    "exchange_status_code": status_code,
+                    "exchange_raw_stderr": stderr,
+                    "exchange_raw_stdout": stdout
+                }
             
         except Exception as e:
-            exchange_logger.error(f"Исключение при создании почтового ящика: {e}")
+            exchange_logger.error(f"❌ Исключение при создании почтового ящика: {e}")
+            exchange_logger.error(f"Тип исключения: {type(e).__name__}")
+            import traceback
+            exchange_logger.error(f"Трассировка: {traceback.format_exc()}")
             return {"success": False, "stderr": str(e)}
     
     async def send_confirmation_email(self, user_data: Dict[str, Any], sam_account_name: str) -> Dict[str, Any]:
         """Отправка подтверждения приема (точно как в PS.ps1)"""
         try:
-            exchange_logger.info(f"Отправка подтверждения приема: {sam_account_name}")
+            exchange_logger.info(f"=== ОТПРАВКА ПОДТВЕРЖДЕНИЯ ПРИЕМА ===")
+            exchange_logger.info(f"Пользователь: {sam_account_name}")
+            exchange_logger.info(f"Данные пользователя: {user_data.get('unique_id', 'N/A')}")
             
             company = user_data.get('company', '')
             if any(keyword in company.upper() for keyword in ['STI', 'СТРОЙ', 'ТЕХНО', 'ИНЖЕНЕРИНГ']):

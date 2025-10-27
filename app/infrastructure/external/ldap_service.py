@@ -260,9 +260,9 @@ class LDAPService:
                     
                     # Специальная обработка для критических атрибутов
                     if attr_name in ['sAMAccountName', 'userPrincipalName']:
-                        # Для SAM Account Name и UPN оставляем только латиницу, цифры, точки и дефисы
+                        # Для SAM Account Name и UPN оставляем только латиницу, цифры, точки, дефисы и @
                         import re
-                        cleaned_value = re.sub(r'[^a-zA-Z0-9.\-]', '', cleaned_value)
+                        cleaned_value = re.sub(r'[^a-zA-Z0-9.\-@]', '', cleaned_value)
                     elif attr_name in ['givenName', 'sn', 'displayName']:
                         # Для имен разрешаем кириллицу, латиницу, цифры, пробелы, точки и дефисы
                         import re
@@ -305,10 +305,11 @@ class LDAPService:
                 # Обновляем атрибуты существующего пользователя
                 ldap_logger.info(f"Обновление атрибутов существующего пользователя...")
                 
-                # Подготавливаем атрибуты для обновления (исключаем objectClass и userAccountControl)
+                # Подготавливаем атрибуты для обновления (исключаем неизменяемые атрибуты)
+                immutable_attrs = ['objectClass', 'userAccountControl', 'sAMAccountName', 'userPrincipalName']
                 update_attributes = {}
                 for attr_name, attr_value in validated_attributes.items():
-                    if attr_name not in ['objectClass', 'userAccountControl'] and attr_value:
+                    if attr_name not in immutable_attrs and attr_value:
                         update_attributes[attr_name] = attr_value
                 
                 ldap_logger.info(f"  Атрибуты для обновления: {len(update_attributes)} атрибутов")
@@ -399,13 +400,69 @@ class LDAPService:
                     "stdout": f"User {sam_account_name} created successfully via LDAP"
                 }
             else:
-                error_msg = f"❌ Ошибка создания пользователя: {conn.result}"
-                ldap_logger.error(error_msg)
-                ldap_logger.error(f"  Код ошибки: {conn.result.get('result', 'N/A')}")
-                ldap_logger.error(f"  Описание: {conn.result.get('description', 'N/A')}")
-                ldap_logger.error(f"  Сообщение: {conn.result.get('message', 'N/A')}")
+                # Получаем детальную информацию об ошибке от LDAP
+                result_code = conn.result.get('result', 'N/A')
+                description = conn.result.get('description', 'N/A')
+                message = conn.result.get('message', 'N/A')
+                
+                # Преобразуем код ошибки в понятное сообщение
+                error_messages = {
+                    1: "Операция не выполнена",
+                    2: "Протокольная ошибка",
+                    3: "Таймаут",
+                    4: "Размер превышен",
+                    5: "Сравнение ложно",
+                    6: "Сравнение истинно",
+                    7: "Аутентификация не поддерживается",
+                    8: "Сильные аутентификации требуются",
+                    9: "Частичные результаты",
+                    10: "Ссылки",
+                    11: "Административное ограничение",
+                    12: "Недоступно критическое расширение",
+                    13: "Конфиденциальность требуется",
+                    14: "SASL bind в процессе",
+                    16: "Нет такого атрибута",
+                    17: "Неопределенный тип атрибута",
+                    18: "Неподходящий сопоставление",
+                    19: "Ограничение нарушения",
+                    20: "Атрибут или значение существует",
+                    21: "Недопустимый синтаксис атрибута",
+                    32: "Нет такого объекта",
+                    33: "Проблема псевдонима",
+                    34: "Недопустимый DN синтаксис",
+                    35: "Является листовым",
+                    36: "Псевдоним проблема",
+                    48: "Недостаточно прав",
+                    49: "Недоступно",
+                    50: "Занято",
+                    51: "Неразрешимо",
+                    52: "Нарушение ограничения времени",
+                    53: "Нарушение ограничения размера",
+                    64: "Тип объекта нарушает",
+                    65: "Не разрешено на нелистовом",
+                    66: "Не разрешено на RDN",
+                    67: "Запись уже существует",
+                    68: "Нет такого объекта класса",
+                    69: "Проблема псевдонима",
+                    70: "Проблема ссылки",
+                    80: "Другая ошибка сервера"
+                }
+                
+                human_error = error_messages.get(result_code, f"Неизвестная ошибка (код {result_code})")
+                
+                error_msg = f"LDAP ошибка: {human_error}"
+                if description != 'N/A':
+                    error_msg += f" - {description}"
+                if message != 'N/A':
+                    error_msg += f" ({message})"
+                
+                ldap_logger.error(f"❌ {error_msg}")
+                ldap_logger.error(f"  Код ошибки: {result_code}")
+                ldap_logger.error(f"  Описание: {description}")
+                ldap_logger.error(f"  Сообщение: {message}")
                 ldap_logger.error(f"  DN: {user_dn}")
-                return {"success": False, "stderr": error_msg}
+                
+                return {"success": False, "stderr": error_msg, "ldap_code": result_code, "ldap_description": description}
                 
         except Exception as e:
             ldap_logger.error(f"❌ Исключение при создании пользователя через LDAP: {e}")

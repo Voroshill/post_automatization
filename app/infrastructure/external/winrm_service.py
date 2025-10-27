@@ -21,9 +21,14 @@ class WinRMService:
     async def execute_powershell(self, script: str) -> Dict[str, Any]:
         """Выполнение PowerShell скрипта через WinRM"""
         try:
-            winrm_logger.info(f"Выполнение PowerShell через WinRM")
+            winrm_logger.info(f"=== ВЫПОЛНЕНИЕ POWERSHELL ЧЕРЕЗ WINRM ===")
+            winrm_logger.info(f"Сервер: {self.server}:{self.port}")
+            winrm_logger.info(f"Пользователь: {self.domain}\\{self.username}")
+            winrm_logger.info(f"Таймаут: {self.read_timeout_sec}с")
             
             scheme = 'https' if str(self.port) == '5986' else 'http'
+            winrm_logger.info(f"Схема подключения: {scheme}")
+            
             session = winrm.Session(
                 f"{scheme}://{self.server}:{self.port}/wsman",
                 auth=(f"{self.domain}\\{self.username}", self.password),
@@ -33,27 +38,44 @@ class WinRMService:
                 operation_timeout_sec=self.operation_timeout_sec
             )
 
+            winrm_logger.info(f"Отправка скрипта на выполнение...")
             result = session.run_ps(script)
             
+            stdout = result.std_out.decode('utf-8', errors='ignore')
+            stderr = result.std_err.decode('utf-8', errors='ignore')
+            
+            winrm_logger.info(f"Код завершения: {result.status_code}")
+            winrm_logger.info(f"STDOUT длина: {len(stdout)} символов")
+            winrm_logger.info(f"STDERR длина: {len(stderr)} символов")
+            
+            if stdout.strip():
+                winrm_logger.info(f"STDOUT: {stdout[:500]}{'...' if len(stdout) > 500 else ''}")
+            if stderr.strip():
+                winrm_logger.warning(f"STDERR: {stderr[:500]}{'...' if len(stderr) > 500 else ''}")
+            
             if result.status_code == 0:
-                winrm_logger.info("PowerShell скрипт выполнен успешно")
+                winrm_logger.info("✅ PowerShell скрипт выполнен успешно")
                 return {
                     "success": True,
-                    "stdout": result.std_out.decode('utf-8', errors='ignore'),
-                    "stderr": result.std_err.decode('utf-8', errors='ignore'),
+                    "stdout": stdout,
+                    "stderr": stderr,
                     "status_code": result.status_code
                 }
             else:
-                winrm_logger.error(f"Ошибка выполнения PowerShell: {result.std_err}")
+                winrm_logger.error(f"❌ Ошибка выполнения PowerShell (код {result.status_code})")
+                winrm_logger.error(f"STDERR: {stderr}")
                 return {
                     "success": False,
-                    "stdout": result.std_out.decode('utf-8', errors='ignore'),
-                    "stderr": result.std_err.decode('utf-8', errors='ignore'),
+                    "stdout": stdout,
+                    "stderr": stderr,
                     "status_code": result.status_code
                 }
                 
         except Exception as e:
-            winrm_logger.error(f"Исключение при выполнении PowerShell через WinRM: {e}")
+            winrm_logger.error(f"❌ Исключение при выполнении PowerShell через WinRM: {e}")
+            winrm_logger.error(f"Тип исключения: {type(e).__name__}")
+            import traceback
+            winrm_logger.error(f"Трассировка: {traceback.format_exc()}")
             return {"success": False, "stderr": str(e)}
     
     async def create_file_folders(self, object_name: str, folders: list) -> Dict[str, Any]:
