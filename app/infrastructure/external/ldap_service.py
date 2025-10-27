@@ -225,15 +225,19 @@ class LDAPService:
                 
                 # Очистка от недопустимых символов
                 if isinstance(attr_value, str):
-                    # Удаляем управляющие символы и недопустимые символы
-                    # Разрешаем только печатные ASCII символы (32-126) и некоторые Unicode символы
-                    cleaned_value = ''.join(char for char in attr_value if ord(char) >= 32 and ord(char) <= 126)
+                    # Удаляем только управляющие символы (0-31, 127) и недопустимые для LDAP символы
+                    # Разрешаем кириллицу и другие Unicode символы
+                    cleaned_value = ''.join(char for char in attr_value if ord(char) >= 32 and ord(char) != 127)
                     
-                    # Дополнительная очистка для критических атрибутов
-                    if attr_name in ['sAMAccountName', 'userPrincipalName', 'givenName', 'sn', 'displayName']:
-                        # Для критических атрибутов убираем все кроме букв, цифр, точек и дефисов
+                    # Специальная обработка для критических атрибутов
+                    if attr_name in ['sAMAccountName', 'userPrincipalName']:
+                        # Для SAM Account Name и UPN оставляем только латиницу, цифры, точки и дефисы
                         import re
                         cleaned_value = re.sub(r'[^a-zA-Z0-9.\-]', '', cleaned_value)
+                    elif attr_name in ['givenName', 'sn', 'displayName']:
+                        # Для имен разрешаем кириллицу, латиницу, цифры, пробелы, точки и дефисы
+                        import re
+                        cleaned_value = re.sub(r'[^\u0400-\u04FF\u0500-\u052Fa-zA-Z0-9.\-\s]', '', cleaned_value)
                     
                     if cleaned_value != attr_value:
                         ldap_logger.warning(f"    Очищен атрибут {attr_name}: '{attr_value}' -> '{cleaned_value}'")
