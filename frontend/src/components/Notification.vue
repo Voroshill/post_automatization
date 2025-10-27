@@ -92,9 +92,15 @@ window.showNotification = showNotification
 window.removeNotification = removeNotification
 window.clearNotifications = clearAll
 
+// Метод для совместимости с errorHandler
+const addNotification = (type, title, message, duration = 5000) => {
+  return showNotification(type, title, message, duration)
+}
+
 // Экспортируем для использования в других компонентах
 defineExpose({
   showNotification,
+  addNotification,
   removeNotification,
   clearAll
 })

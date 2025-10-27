@@ -14,10 +14,11 @@ class ErrorHandler {
   showNotification(type, title, message, duration = 5000) {
     if (this.notificationInstance && this.notificationInstance.addNotification) {
       this.notificationInstance.addNotification(type, title, message, duration);
+    } else if (window.showNotification) {
+      // Используем глобальную функцию уведомлений
+      window.showNotification(type, title, message, duration);
     } else {
       console.warn('Notification component not initialized. Cannot show notification:', { type, title, message });
-      // Fallback - показываем alert
-      alert(`${title}: ${message}`);
     }
   }
 
@@ -82,8 +83,10 @@ class ErrorHandler {
       this.notificationInstance.addNotification(type, title, message, 8000);
     } else {
       console.error(`Error: ${title} - ${message}`, error);
-      // Fallback
-      alert(`${title}: ${message}`);
+      // Fallback - используем глобальную функцию уведомлений
+      if (window.showNotification) {
+        window.showNotification('error', title, message);
+      }
     }
   }
 
@@ -209,8 +212,10 @@ class ErrorHandler {
       this.notificationInstance.addNotification(type, title, message, 8000);
     } else {
       console.error(`API Error: ${title} - ${message}`, response);
-      // Fallback
-      alert(`${title}: ${message}`);
+      // Fallback - используем глобальную функцию уведомлений
+      if (window.showNotification) {
+        window.showNotification('error', title, message);
+      }
     }
   }
 
@@ -219,7 +224,10 @@ class ErrorHandler {
       this.notificationInstance.addNotification('success', title, message);
     } else {
       console.log(`Success: ${title} - ${message}`);
-      alert(`${title}: ${message}`);
+      // Fallback - используем глобальную функцию уведомлений
+      if (window.showNotification) {
+        window.showNotification('success', title, message);
+      }
     }
   }
 
@@ -228,7 +236,10 @@ class ErrorHandler {
       this.notificationInstance.addNotification('warning', title, message);
     } else {
       console.warn(`Warning: ${title} - ${message}`);
-      alert(`${title}: ${message}`);
+      // Fallback - используем глобальную функцию уведомлений
+      if (window.showNotification) {
+        window.showNotification('warning', title, message);
+      }
     }
   }
 
@@ -237,7 +248,10 @@ class ErrorHandler {
       this.notificationInstance.addNotification('info', title, message);
     } else {
       console.info(`Info: ${title} - ${message}`);
-      alert(`${title}: ${message}`);
+      // Fallback - используем глобальную функцию уведомлений
+      if (window.showNotification) {
+        window.showNotification('info', title, message);
+      }
     }
   }
 }

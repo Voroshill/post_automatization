@@ -207,8 +207,8 @@ class LDAPService:
                 'streetAddress': user_data.get('current_location_id', ''),
                 'physicalDeliveryOfficeName': user_data.get('current_location_id', ''),
                 'telephoneNumber': user_data.get('work_phone', ''),
-                # Создаём DISABLED пользователя, затем установим пароль по LDAPS и включим
-                'userAccountControl': '514'  # ИСПРАВЛЕНО: строка вместо числа
+                # Создаём включенного пользователя (как в PowerShell)
+                'userAccountControl': 512  # ENABLED пользователь
             }
             
             # Валидация атрибутов перед использованием
@@ -220,19 +220,46 @@ class LDAPService:
                 
                 # Специальная обработка для критических атрибутов
                 if attr_name == 'userAccountControl':
-                    validated_attributes[attr_name] = str(attr_value)
+                    validated_attributes[attr_name] = int(attr_value)
                     continue
                 
                 # Очистка от недопустимых символов
                 if isinstance(attr_value, str):
                     # Удаляем управляющие символы и недопустимые символы
-                    cleaned_value = ''.join(char for char in attr_value if ord(char) >= 32 and ord(char) != 127)
+                    # Разрешаем только печатные ASCII символы (32-126) и некоторые Unicode символы
+                    cleaned_value = ''.join(char for char in attr_value if ord(char) >= 32 and ord(char) <= 126)
+                    
+                    # Дополнительная очистка для критических атрибутов
+                    if attr_name in ['sAMAccountName', 'userPrincipalName', 'givenName', 'sn', 'displayName']:
+                        # Для критических атрибутов убираем все кроме букв, цифр, точек и дефисов
+                        import re
+                        cleaned_value = re.sub(r'[^a-zA-Z0-9.\-]', '', cleaned_value)
+                    
                     if cleaned_value != attr_value:
                         ldap_logger.warning(f"    Очищен атрибут {attr_name}: '{attr_value}' -> '{cleaned_value}'")
-                    validated_attributes[attr_name] = cleaned_value
+                    
+                    # Проверяем, что значение не пустое после очистки
+                    if cleaned_value.strip():
+                        validated_attributes[attr_name] = cleaned_value.strip()
+                    else:
+                        ldap_logger.warning(f"    Атрибут {attr_name} стал пустым после очистки, пропускаем")
                 else:
                     validated_attributes[attr_name] = attr_value
 
+            # Проверяем обязательные атрибуты
+            required_attrs = ['sAMAccountName', 'userPrincipalName', 'givenName', 'sn', 'displayName']
+            missing_attrs = []
+            for attr in required_attrs:
+                if attr not in validated_attributes or not validated_attributes[attr]:
+                    missing_attrs.append(attr)
+            
+            if missing_attrs:
+                error_msg = f"Отсутствуют обязательные атрибуты: {', '.join(missing_attrs)}"
+                ldap_logger.error(f"❌ {error_msg}")
+                return {"success": False, "stderr": error_msg}
+            
+            ldap_logger.info(f"Все обязательные атрибуты присутствуют: {', '.join(required_attrs)}")
+            
             # Проверка существования по sAMAccountName
             conn.search('DC=central,DC=st-ing,DC=com', f'(sAMAccountName={sam_account_name})', attributes=['distinguishedName'])
             exists_dn = conn.entries[0].distinguishedName.value if conn.entries else None
@@ -302,7 +329,7 @@ class LDAPService:
                     ldap_logger.info(f"✅ Пользователь {sam_account_name} успешно обновлен в AD через LDAP")
                 else:
                     ldap_logger.info(f"✅ Пользователь {sam_account_name} успешно создан в AD через LDAP")
-                # Установка пароля по LDAPS и включение учётной записи
+                # Установка пароля по LDAPS (пользователь уже включен)
                 ldap_logger.info(f"Установка пароля для пользователя по LDAPS...")
                 try:
                     secure_server = Server(self.ad_server, get_info=ALL, connect_timeout=settings.ldap_timeout, use_ssl=True, port=636)
@@ -315,18 +342,16 @@ class LDAPService:
                     )
                     secure_conn.extend.microsoft.modify_password(user_dn, settings.default_user_password)
                     ldap_logger.info(f"✅ Пароль установлен успешно (LDAPS)")
-                    # Включаем учётную запись
-                    conn.modify(
-                        user_dn,
-                        {'userAccountControl': [(MODIFY_REPLACE, ['512'])]}
-                    )
+                    
                     # Требовать смену пароля при первом входе
                     conn.modify(
                         user_dn,
                         {'pwdLastSet': [(MODIFY_REPLACE, ['0'])]}
                     )
+                    ldap_logger.info(f"✅ Установлено требование смены пароля при первом входе")
+                    
                 except Exception as e:
-                    ldap_logger.error(f"❌ Ошибка установки пароля/включения: {str(e)}")
+                    ldap_logger.error(f"❌ Ошибка установки пароля: {str(e)}")
                 
                 await self._add_user_to_groups(sam_account_name, user_data)
                 

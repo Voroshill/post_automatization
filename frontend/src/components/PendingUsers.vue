@@ -531,7 +531,9 @@ export default {
           await window.userServiceForModal.createUserManually(formData)
           
           // Показываем успешное сообщение
-          alert('Пользователь успешно создан!')
+          if (window.showNotification) {
+            window.showNotification('success', 'Пользователь создан', 'Пользователь успешно создан!')
+          }
           
           // Обновляем список пользователей через событие
           window.dispatchEvent(new CustomEvent('userCreated'))
