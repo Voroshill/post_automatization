@@ -294,6 +294,109 @@ export default {
       }
     }
 
+    const validateFormData = (formData) => {
+      const errors = []
+      
+      // Валидация компании
+      const company = formData.company.toLowerCase()
+      if (!company.includes('sti') && !company.includes('строй') && 
+          !company.includes('техно') && !company.includes('инженеринг') &&
+          !company.includes('dttermo') && !company.includes('дт')) {
+        errors.push('Компания должна содержать: STI, Строй, Техно, Инженеринг, DtTermo или ДТ')
+      }
+      
+      // Валидация локации и департамента
+      const location = formData.current_location_id.toLowerCase()
+      const department = formData.Department.toLowerCase()
+      
+      // Проверки для Медового
+      if (location.includes('медовый')) {
+        const validDepartments = [
+          'информац', 'кадро', 'персона', 'управленческ', 'проектир', 
+          'ендерны', 'закупок', 'логистик', 'снабже', 'труд', 
+          'пто', 'метный', 'ланово', 'ухгалтери', 'азначе', 
+          'ридически', 'дминистративны'
+        ]
+        if (!validDepartments.some(dept => department.includes(dept))) {
+          errors.push('Для локации "Медовый" выберите подходящий департамент')
+        }
+      }
+      
+      // Проверки для Лобни
+      if (location.includes('лобня')) {
+        if (!department.includes('логистик')) {
+          errors.push('Для локации "Лобня" доступен только отдел логистики')
+        }
+      }
+      
+      // Проверки для Трёхпрудного
+      if (location.includes('прудный')) {
+        // Трёхпрудный имеет фиксированную OU, департамент не важен
+      }
+      
+      // Проверки для строительных объектов
+      const constructionObjects = ['емеров', 'амчатк', 'гнитогор', 'инько', 'ер к32', 'авидо', 'ктафар', 'ухарев', 'алент', 'рофлот', 'on']
+      if (constructionObjects.some(obj => location.includes(obj))) {
+        // Строительные объекты имеют фиксированную OU
+      }
+      
+      return errors
+    }
+
+    const validateCurrentForm = () => {
+      const formData = {
+        company: document.getElementById('company')?.value || '',
+        current_location_id: document.getElementById('current_location_id')?.value || '',
+        Department: document.getElementById('Department')?.value || ''
+      }
+      
+      const errors = validateFormData(formData)
+      const errorDiv = document.getElementById('createError')
+      
+      if (errors.length > 0) {
+        errorDiv.textContent = errors.join('; ')
+        errorDiv.style.display = 'block'
+        errorDiv.style.backgroundColor = '#fff3cd'
+        errorDiv.style.borderColor = '#ffeaa7'
+        errorDiv.style.color = '#856404'
+      } else {
+        errorDiv.style.display = 'none'
+      }
+    }
+
+    const loadDepartments = () => {
+      const departments = [
+        'Отдел информационных технологий',
+        'Отдел кадров',
+        'Отдел персонала',
+        'Отдел управленческого учета',
+        'Отдел проектирования',
+        'Тендерный отдел',
+        'Отдел закупок',
+        'Отдел логистики и складского учета',
+        'Отдел снабжения',
+        'Отдел охраны труда',
+        'Отдел ПТО',
+        'Сметный отдел',
+        'Планово экономический отдел',
+        'Бухгалтерия',
+        'Казначейство',
+        'Юридический отдел',
+        'Административный отдел'
+      ]
+      
+      const select = document.getElementById('Department')
+      if (select) {
+        select.innerHTML = '<option value="">Выберите департамент</option>'
+        departments.forEach(dept => {
+          const option = document.createElement('option')
+          option.value = dept
+          option.textContent = dept
+          select.appendChild(option)
+        })
+      }
+    }
+
     const loadOUs = async () => {
       try {
         const response = await fetch('/api/users/ous')
@@ -345,9 +448,6 @@ export default {
         UploadDate: new Date().toISOString()
       }
       createError.value = ''
-      
-      // Загружаем список OU
-      await loadOUs()
       
       // Создаем модальное окно динамически и добавляем к body
       const modalHtml = `
@@ -413,10 +513,13 @@ export default {
                   <div>
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Компания *</label>
                     <input type="text" id="company" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;" required>
+                    <small style="color: #6c757d; font-size: 0.875rem;">Должна содержать: STI, Строй, Техно, Инженеринг, DtTermo или ДТ</small>
                   </div>
                   <div>
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Департамент *</label>
-                    <input type="text" id="Department" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;" required>
+                    <select id="Department" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;" required>
+                      <option value="">Загрузка...</option>
+                    </select>
                   </div>
                   <div>
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Отдел *</label>
@@ -437,6 +540,7 @@ export default {
                   <div>
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Локация *</label>
                     <input type="text" id="current_location_id" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;" required>
+                    <small style="color: #6c757d; font-size: 0.875rem;">Примеры: Медовый, Лобня, Трёхпрудный, Кемерово, Камчатка, Магнитогорск, etc.</small>
                   </div>
                   <div>
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">ID руководителя</label>
@@ -451,12 +555,6 @@ export default {
                     <select id="is_engeneer" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;">
                       <option value="0">Нет</option>
                       <option value="1">Да</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Организационная единица *</label>
-                    <select id="ou_dn" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;" required>
-                      <option value="">Загрузка...</option>
                     </select>
                   </div>
                 </div>
@@ -496,6 +594,26 @@ export default {
       
       document.body.insertAdjacentHTML('beforeend', modalHtml)
       document.body.style.overflow = 'hidden'
+      
+      // Загружаем список департаментов после создания модального окна
+      loadDepartments()
+      
+      // Добавляем валидацию при изменении полей
+      setTimeout(() => {
+        const locationField = document.getElementById('current_location_id')
+        const departmentField = document.getElementById('Department')
+        const companyField = document.getElementById('company')
+        
+        if (locationField) {
+          locationField.addEventListener('input', validateCurrentForm)
+        }
+        if (departmentField) {
+          departmentField.addEventListener('change', validateCurrentForm)
+        }
+        if (companyField) {
+          companyField.addEventListener('input', validateCurrentForm)
+        }
+      }, 100)
       
       // Добавляем глобальные функции для работы с модальным окном
       window.closeCreateModal = () => {
@@ -542,18 +660,28 @@ export default {
           boss_id: document.getElementById('boss_id').value,
           BirthDate: document.getElementById('BirthDate').value,
           is_engeneer: document.getElementById('is_engeneer').value,
-          ou_dn: document.getElementById('ou_dn').value,
           o_id: '',
           UploadDate: new Date().toISOString()
         }
         
         // Проверяем обязательные поля
-        const required = ['unique', 'firstname', 'secondname', 'company', 'Department', 'Otdel', 'appointment', 'current_location_id', 'ou_dn']
+        const required = ['unique', 'firstname', 'secondname', 'company', 'Department', 'Otdel', 'appointment', 'current_location_id']
         const missing = required.filter(field => !formData[field])
         
         if (missing.length > 0) {
           errorDiv.textContent = 'Заполните все обязательные поля: ' + missing.join(', ')
           errorDiv.style.display = 'block'
+          return
+        }
+        
+        // Валидация по правилам из PowerShell скрипта
+        const validationErrors = validateFormData(formData)
+        if (validationErrors.length > 0) {
+          errorDiv.textContent = validationErrors.join('; ')
+          errorDiv.style.display = 'block'
+          errorDiv.style.backgroundColor = '#f8d7da'
+          errorDiv.style.borderColor = '#f5c6cb'
+          errorDiv.style.color = '#721c24'
           return
         }
         

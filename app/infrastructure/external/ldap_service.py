@@ -209,14 +209,10 @@ class LDAPService:
                 ou = 'OU=Технические логины,DC=central,DC=st-ing,DC=com'
                 ldap_logger.info(f"  Тип пользователя: Технический (is_engineer=1)")
             else:
-                # Используем переданную OU или ищем по логике
-                if user_data.get('ou_dn'):
-                    ou = user_data.get('ou_dn')
-                    ldap_logger.info(f"  Используется переданная OU: {ou}")
-                else:
-                    ou = self.find_ou(user_data.get('current_location_id', ''), user_data.get('department', ''))
-                    ldap_logger.info(f"  OU найдена по логике: {ou}")
+                # Определяем OU по логике из PowerShell скрипта
+                ou = self.find_ou(user_data.get('current_location_id', ''), user_data.get('department', ''))
                 ldap_logger.info(f"  Тип пользователя: Обычный (is_engineer={user_data.get('is_engineer', 'None')})")
+                ldap_logger.info(f"  OU найдена по логике: {ou}")
             
             ldap_logger.info(f"  Организационная единица: {ou}")
             
