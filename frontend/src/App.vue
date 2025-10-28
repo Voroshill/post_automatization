@@ -22,7 +22,7 @@
     </nav>
 
     <!-- Модальное окно входа -->
-    <div v-if="showLoginModal && !isAuthenticated" class="modal-overlay" @click="showLoginModal = false">
+    <div v-if="showLoginModal" class="modal-overlay" @click.self="showLoginModal = false">
       <div class="modal" @click.stop>
         <h2>Вход в систему</h2>
         <form @submit.prevent="login" class="login-form">
@@ -202,8 +202,6 @@ const notificationComponent = ref(null)
 // Обработчики событий
 const login = async () => {
   try {
-    console.log('Login attempt:', loginForm.username, loginForm.password)
-    
     // Используем API для аутентификации
     const result = await userService.login(loginForm.username, loginForm.password)
     
@@ -253,17 +251,14 @@ const updateStats = (stats) => {
 }
 
 const showCreateModal = () => {
-  console.log('showCreateModal called, incrementing trigger from', showCreateModalTrigger.value, 'to', showCreateModalTrigger.value + 1)
   showCreateModalTrigger.value++
 }
 
 const refreshUsers = () => {
-  console.log('refreshUsers called, incrementing trigger from', refreshTrigger.value, 'to', refreshTrigger.value + 1)
   refreshTrigger.value++
 }
 
 const scrollToTop = () => {
-  console.log('Scroll to top clicked!')
   window.scrollTo({
     top: 0,
     behavior: 'smooth'
@@ -273,26 +268,21 @@ const scrollToTop = () => {
 const handleScroll = () => {
   const scrollY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop
   showScrollToTop.value = scrollY > 300
-  console.log('Scroll position:', scrollY, 'Show button:', showScrollToTop.value)
 }
 
 // Инициализация при загрузке
 onMounted(() => {
-  console.log('App mounted, showLoginModal:', showLoginModal.value)
   
   // Инициализируем errorHandler с notification компонентом с задержкой
   setTimeout(() => {
     if (notificationComponent.value) {
       errorHandler.setNotificationInstance(notificationComponent.value)
-      console.log('ErrorHandler initialized with notification component')
     } else {
-      console.warn('Notification component not found')
     }
   }, 100)
   
   // Показываем модальное окно входа при загрузке
   showLoginModal.value = true
-  console.log('After setting showLoginModal:', showLoginModal.value)
   
   // Добавляем обработчик прокрутки
   window.addEventListener('scroll', handleScroll)

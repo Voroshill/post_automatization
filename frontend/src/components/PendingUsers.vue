@@ -455,6 +455,7 @@ export default {
     }
 
     const loadDepartments = () => {
+      console.log('Загрузка департаментов...')
       const departments = [
         'Технический департамент',
         'Коммерческий департамент', 
@@ -465,6 +466,7 @@ export default {
       ]
       
       const select = document.getElementById('Department')
+      console.log('Элемент Department найден:', !!select)
       if (select) {
         select.innerHTML = '<option value="">Выберите департамент</option>'
         departments.forEach(dept => {
@@ -473,6 +475,9 @@ export default {
           option.textContent = dept
           select.appendChild(option)
         })
+        console.log('Департаменты загружены:', departments.length)
+      } else {
+        console.error('Элемент Department не найден!')
       }
     }
 
@@ -502,6 +507,7 @@ export default {
     }
 
     const loadLocations = () => {
+      console.log('Загрузка локаций...')
       const locations = [
         'Медовый',
         'Лобня', 
@@ -520,6 +526,7 @@ export default {
       ]
       
       const select = document.getElementById('current_location_id')
+      console.log('Элемент current_location_id найден:', !!select)
       if (select) {
         select.innerHTML = '<option value="">Выберите локацию</option>'
         locations.forEach(location => {
@@ -528,6 +535,9 @@ export default {
           option.textContent = location
           select.appendChild(option)
         })
+        console.log('Локации загружены:', locations.length)
+      } else {
+        console.error('Элемент current_location_id не найден!')
       }
     }
 
@@ -537,6 +547,7 @@ export default {
     }
 
     const filterOfficesByDepartment = (department) => {
+      console.log('Фильтрация отделов по департаменту:', department)
       const allOffices = {
         'Технический департамент': [
           'Отдел ПТО',
@@ -570,6 +581,7 @@ export default {
       }
       
       const select = document.getElementById('Otdel')
+      console.log('Элемент Otdel найден:', !!select)
       if (select) {
         select.innerHTML = '<option value="">Выберите отдел</option>'
         
@@ -580,9 +592,13 @@ export default {
             option.textContent = office
             select.appendChild(option)
           })
+          console.log('Отделы загружены для департамента', department, ':', allOffices[department].length)
         } else {
           select.innerHTML = '<option value="">Сначала выберите департамент</option>'
+          console.log('Департамент не найден или пустой:', department)
         }
+      } else {
+        console.error('Элемент Otdel не найден!')
       }
     }
 
@@ -767,12 +783,11 @@ export default {
       document.body.insertAdjacentHTML('beforeend', modalHtml)
       document.body.style.overflow = 'hidden'
       
-      // Загружаем списки департаментов и локаций после создания модального окна
-      loadDepartments()
-      loadLocations()
-      
       // Добавляем валидацию при изменении полей
       setTimeout(() => {
+        // Загружаем списки департаментов и локаций после создания модального окна
+        loadDepartments()
+        loadLocations()
         const fields = [
           'unique', 'firstname', 'secondname', 'company', 'Department', 'Otdel', 'appointment',
           'current_location_id', 'MobilePhone', 'WorkPhone', 'BirthDate'
