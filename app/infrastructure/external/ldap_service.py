@@ -579,17 +579,27 @@ class LDAPService:
         try:
             conn = await self._get_connection()
             
+            # Ищем DN пользователя по sAMAccountName, так как методы расширения ждут DN
+            user_dn: Optional[str] = None
+            conn.search('DC=central,DC=st-ing,DC=com', f'(sAMAccountName={sam_account_name})', attributes=['distinguishedName'])
+            if conn.entries:
+                user_dn = conn.entries[0].distinguishedName.value
+            else:
+                ldap_logger.warning(f"Пользователь {sam_account_name} не найден для добавления в группы")
+                return
+
             company = user_data.get('company', '')
+            # Добавляем в организационные группы, используя DN групп
             if any(keyword in company.upper() for keyword in ['СТРОЙ', 'ТЕХНО', 'ИНЖЕНЕРИНГ', 'STI', 'ТРОЙ']):
-                conn.extend.microsoft.add_members_to_groups(
-                    sam_account_name, 
-                    'СтройТехноИнженеринг'
-                )
+                conn.search('DC=central,DC=st-ing,DC=com', '(cn=СтройТехноИнженеринг)', attributes=['distinguishedName'])
+                if conn.entries:
+                    org_grp_dn = conn.entries[0].distinguishedName.value
+                    conn.extend.microsoft.add_members_to_groups(user_dn, org_grp_dn)
             elif any(keyword in company.upper() for keyword in ['DTTERMO', 'ДТ']):
-                conn.extend.microsoft.add_members_to_groups(
-                    sam_account_name, 
-                    'DttermoSign'
-                )
+                conn.search('DC=central,DC=st-ing,DC=com', '(cn=DttermoSign)', attributes=['distinguishedName'])
+                if conn.entries:
+                    org_grp_dn = conn.entries[0].distinguishedName.value
+                    conn.extend.microsoft.add_members_to_groups(user_dn, org_grp_dn)
             
             department = user_data.get('department', '')
             if department:
@@ -601,10 +611,7 @@ class LDAPService:
                         grp_dn = conn.entries[0].distinguishedName.value
                         break
                 if grp_dn:
-                    conn.extend.microsoft.add_members_to_groups(
-                        sam_account_name,
-                        grp_dn
-                    )
+                    conn.extend.microsoft.add_members_to_groups(user_dn, grp_dn)
                 else:
                     ldap_logger.warning(f"Группа отдела не найдена: {department}")
                 
