@@ -145,10 +145,19 @@ class LDAPService:
             elif 'дминистративны' in department.lower():
                 return "OU=Административный отдел,OU=Департамент обеспечения,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
         
+        # Проверяем строительные объекты - используем полное название объекта
         construction_objects = ['емеров', 'амчатк', 'гнитогор', 'инько', 'ер К32', 'авидо', 'ктафар', 'ухарев', 'алент', 'рофлот', 'ON']
-        if any(obj in obj_name.lower() for obj in construction_objects):
-            # Точно как в PowerShell: создаем индивидуальную OU для каждого строительного объекта
-            return f"OU={obj_name},OU=Строительные объекты,OU=Отдел управления проектами,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+        for obj in construction_objects:
+            if obj in obj_name.lower():
+                # Точно как в PowerShell: создаем индивидуальную OU для каждого строительного объекта
+                individual_ou = f"OU={obj_name},OU=Строительные объекты,OU=Отдел управления проектами,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+                
+                # Проверяем, не превышает ли DN лимит в 256 символов
+                if len(individual_ou) > 256:
+                    ldap_logger.warning(f"Индивидуальная OU слишком длинная ({len(individual_ou)} символов), используем общую OU")
+                    return "OU=Строительные объекты,OU=Отдел управления проектами,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+                
+                return individual_ou
         
         # Если не найдена подходящая OU, возвращаем ошибку (точно как в PowerShell)
         raise ValueError(f"Не найдена подходящая организационная единица для объекта '{obj_name}' и отдела '{department}'")
@@ -224,8 +233,34 @@ class LDAPService:
             ldap_logger.info(f"  Организационная единица: {ou}")
             
             display_name = f"{user_data.get('firstname', '')} {user_data.get('secondname', '')} {user_data.get('thirdname', '')}"
-            user_dn = f"CN={display_name},{ou}"
+            
+            # Сокращаем CN до максимум 64 символов для избежания превышения лимита DN
+            cn_name = display_name
+            if len(cn_name) > 64:
+                # Берем только имя и фамилию, если полное имя слишком длинное
+                cn_name = f"{user_data.get('firstname', '')} {user_data.get('secondname', '')}"
+                if len(cn_name) > 64:
+                    # Если и это слишком длинное, берем только первые части
+                    firstname = user_data.get('firstname', '')
+                    secondname = user_data.get('secondname', '')
+                    cn_name = f"{firstname[:32]} {secondname[:32-len(firstname[:32])-1]}"
+            
+            user_dn = f"CN={cn_name},{ou}"
             ldap_logger.info(f"  Distinguished Name: {user_dn}")
+            
+            # Проверяем общую длину DN (максимум 256 символов для AD)
+            if len(user_dn) > 256:
+                ldap_logger.warning(f"  DN слишком длинный ({len(user_dn)} символов), сокращаем CN")
+                # Дополнительно сокращаем CN если DN все еще слишком длинный
+                max_cn_length = 256 - len(ou) - 4  # 4 символа для "CN=,"
+                if max_cn_length > 0:
+                    cn_name = cn_name[:max_cn_length]
+                    user_dn = f"CN={cn_name},{ou}"
+                    ldap_logger.info(f"  Сокращенный DN: {user_dn}")
+            
+            ldap_logger.info(f"  Итоговый DN ({len(user_dn)} символов): {user_dn}")
+            if cn_name != display_name:
+                ldap_logger.info(f"  CN сокращен с '{display_name}' до '{cn_name}'")
             
             attributes = {
                 'objectClass': ['top', 'person', 'organizationalPerson', 'user'],
@@ -233,7 +268,7 @@ class LDAPService:
                 'userPrincipalName': user_principal_name,
                 'givenName': user_data.get('firstname', ''),
                 'sn': user_data.get('secondname', ''),
-                'displayName': display_name,
+                'displayName': cn_name,
                 'mail': user_principal_name,
                 'pager': user_data.get('unique_id', ''),
                 'company': user_data.get('company', ''),
