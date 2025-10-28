@@ -234,36 +234,75 @@ class LDAPService:
             
             display_name = f"{user_data.get('firstname', '')} {user_data.get('secondname', '')} {user_data.get('thirdname', '')}"
             
-            # Сокращаем CN до максимум 64 символов для избежания превышения лимита DN
+            # Сначала проверяем длину OU и сокращаем CN соответственно
+            ou_length = len(ou)
+            max_dn_length = 200  # Более консервативный лимит для AD
+            max_cn_length = max_dn_length - ou_length - 4  # 4 символа для "CN=,"
+            
+            ldap_logger.info(f"  Длина OU: {ou_length} символов")
+            ldap_logger.info(f"  Максимальная длина CN: {max_cn_length} символов")
+            
+            # Сокращаем CN с учетом длины OU
             cn_name = display_name
-            if len(cn_name) > 64:
-                # Берем только имя и фамилию, если полное имя слишком длинное
-                cn_name = f"{user_data.get('firstname', '')} {user_data.get('secondname', '')}"
-                if len(cn_name) > 64:
-                    # Если и это слишком длинное, берем только первые части
-                    firstname = user_data.get('firstname', '')
-                    secondname = user_data.get('secondname', '')
-                    cn_name = f"{firstname[:32]} {secondname[:32-len(firstname[:32])-1]}"
+            if len(cn_name) > max_cn_length:
+                ldap_logger.warning(f"  CN слишком длинный ({len(cn_name)} символов), сокращаем")
+                
+                # Сначала пробуем только имя и фамилию
+                firstname = user_data.get('firstname', '')
+                secondname = user_data.get('secondname', '')
+                cn_name = f"{firstname} {secondname}"
+                
+                if len(cn_name) > max_cn_length:
+                    # Если и это слишком длинное, сокращаем каждую часть
+                    firstname_len = min(len(firstname), max_cn_length // 2)
+                    secondname_len = min(len(secondname), max_cn_length - firstname_len - 1)
+                    
+                    cn_name = f"{firstname[:firstname_len]} {secondname[:secondname_len]}"
+                    
+                    # Если все еще слишком длинное, используем только имя
+                    if len(cn_name) > max_cn_length:
+                        cn_name = firstname[:max_cn_length]
+                        
+                    ldap_logger.warning(f"  CN сокращен до: '{cn_name}' ({len(cn_name)} символов)")
             
             user_dn = f"CN={cn_name},{ou}"
             ldap_logger.info(f"  Distinguished Name: {user_dn}")
             
-            # Проверяем общую длину DN (максимум 256 символов для AD)
-            if len(user_dn) > 256:
-                ldap_logger.warning(f"  DN слишком длинный ({len(user_dn)} символов), сокращаем CN")
-                # Дополнительно сокращаем CN если DN все еще слишком длинный
-                max_cn_length = 256 - len(ou) - 4  # 4 символа для "CN=,"
-                if max_cn_length > 0:
-                    cn_name = cn_name[:max_cn_length]
+            # Финальная проверка длины DN
+            if len(user_dn) > max_dn_length:
+                ldap_logger.error(f"  ❌ DN все еще слишком длинный ({len(user_dn)} символов)")
+                # Используем только SAM Account Name как CN
+                cn_name = sam_account_name
+                user_dn = f"CN={cn_name},{ou}"
+                ldap_logger.warning(f"  Используем SAM Account Name как CN: {user_dn}")
+                
+                # Если и это не помогает, используем короткий CN
+                if len(user_dn) > max_dn_length:
+                    cn_name = f"User{user_data.get('unique_id', '')}"
                     user_dn = f"CN={cn_name},{ou}"
-                    ldap_logger.info(f"  Сокращенный DN: {user_dn}")
+                    ldap_logger.warning(f"  Используем короткий CN: {user_dn}")
             
             ldap_logger.info(f"  Итоговый DN ({len(user_dn)} символов): {user_dn}")
             if cn_name != display_name:
                 ldap_logger.info(f"  CN сокращен с '{display_name}' до '{cn_name}'")
             
+            # Финальная валидация DN перед созданием
+            if len(user_dn) > max_dn_length:
+                error_msg = f"DN слишком длинный ({len(user_dn)} символов), максимально допустимо {max_dn_length}"
+                ldap_logger.error(f"❌ {error_msg}")
+                return {"success": False, "stderr": error_msg}
+            
+            # Дополнительная диагностика DN
+            ldap_logger.info(f"  Диагностика DN:")
+            ldap_logger.info(f"    Длина OU: {ou_length}")
+            ldap_logger.info(f"    Длина CN: {len(cn_name)}")
+            ldap_logger.info(f"    Общая длина DN: {len(user_dn)}")
+            ldap_logger.info(f"    Лимит DN: {max_dn_length}")
+            ldap_logger.info(f"    Запас: {max_dn_length - len(user_dn)} символов")
+            
             attributes = {
                 'objectClass': ['top', 'person', 'organizationalPerson', 'user'],
+                'cn': cn_name,
                 'sAMAccountName': sam_account_name,
                 'userPrincipalName': user_principal_name,
                 'givenName': user_data.get('firstname', ''),
@@ -278,8 +317,8 @@ class LDAPService:
                 'streetAddress': user_data.get('current_location_id', ''),
                 'physicalDeliveryOfficeName': user_data.get('current_location_id', ''),
                 'telephoneNumber': user_data.get('work_phone', ''),
-                # Создаём включенного пользователя (как в PowerShell)
-                'userAccountControl': 512  # ENABLED пользователь
+                # Создаём ОТКЛЮЧЕННОГО пользователя, затем установим пароль по LDAPS и включим
+                'userAccountControl': 514  # NORMAL_ACCOUNT + ACCOUNTDISABLE
             }
             
             # Валидация атрибутов перед использованием
@@ -414,7 +453,7 @@ class LDAPService:
                     ldap_logger.info(f"✅ Пользователь {sam_account_name} успешно обновлен в AD через LDAP")
                 else:
                     ldap_logger.info(f"✅ Пользователь {sam_account_name} успешно создан в AD через LDAP")
-                # Установка пароля по LDAPS (пользователь уже включен)
+                # Установка пароля по LDAPS и включение пользователя, чтобы совпадать с поведением PowerShell
                 ldap_logger.info(f"Установка пароля для пользователя по LDAPS...")
                 try:
                     secure_server = Server(self.ad_server, get_info=ALL, connect_timeout=settings.ldap_timeout, use_ssl=True, port=636)
@@ -427,6 +466,13 @@ class LDAPService:
                     )
                     secure_conn.extend.microsoft.modify_password(user_dn, settings.default_user_password)
                     ldap_logger.info(f"✅ Пароль установлен успешно (LDAPS)")
+                    
+                    # Включаем учетную запись (NORMAL_ACCOUNT = 512)
+                    conn.modify(
+                        user_dn,
+                        {'userAccountControl': [(MODIFY_REPLACE, ['512'])]}
+                    )
+                    ldap_logger.info(f"✅ Пользователь включен (userAccountControl=512)")
                     
                     # Требовать смену пароля при первом входе
                     conn.modify(
