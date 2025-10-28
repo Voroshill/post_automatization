@@ -16,13 +16,13 @@ services:
     restart: unless-stopped
     # user: "1000:1000"  # Закомментировано для избежания проблем с правами
     ports:
-      - "172.17.177.57:8000:8000"
+      - "8000:8000"
 
   frontend:
     build: ./frontend
     container_name: user-management-frontend
     ports:
-      - "172.17.177.57:8080:80"
+      - "8080:80"
     restart: unless-stopped
 
 volumes:
