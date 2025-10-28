@@ -10,7 +10,7 @@ services:
       - WINRM_PORT=5985
       - EXCHANGE_SERVER=mailzone.central.st-ing.com
     volumes:
-      - ./data:/app/data
+      - app_data:/app/data
       - ./scripts:/app/scripts
       - ./logs:/app/logs
     restart: unless-stopped
@@ -24,3 +24,6 @@ services:
     ports:
       - "172.17.177.57:8080:80"
     restart: unless-stopped
+
+volumes:
+  app_data:
