@@ -175,6 +175,7 @@ class WinRMService:
     async def send_smtp_email(self, to_email: str, subject: str, body: str, attachment_path: str = None) -> Dict[str, Any]:
         """Отправка email через SMTP на Windows сервере"""
         try:
+            safe_attachment = attachment_path or ""
             script = f"""
             $From = "{settings.smtp_username}"
             $To = "{to_email}"
@@ -193,8 +194,9 @@ class WinRMService:
             $MailMessage = New-Object System.Net.Mail.MailMessage($From, $To, $Subject, $Body)
             $MailMessage.IsBodyHtml = $false
             
-            if ("{attachment_path}" -ne "") {{
-                $Attachment = New-Object System.Net.Mail.Attachment("{attachment_path}")
+            $AttachmentPath = "{safe_attachment}"
+            if ($AttachmentPath -and $AttachmentPath -ne "None" -and (Test-Path $AttachmentPath)) {{
+                $Attachment = New-Object System.Net.Mail.Attachment($AttachmentPath)
                 $MailMessage.Attachments.Add($Attachment)
             }}
             
