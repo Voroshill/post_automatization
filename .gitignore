@@ -1,3 +1,5 @@
+# Local docker compose for development
+docker-compose.local.yml
 # Environment variables
 .env
 .env.local
