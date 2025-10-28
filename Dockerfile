@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -15,9 +16,17 @@ RUN apt-get update && apt-get install -y \
 
 COPY pyproject.toml poetry.lock ./
 
-RUN pip install poetry && \
+# Faster and reliable pip/poetry installs
+ENV PIP_DEFAULT_TIMEOUT=120 \
+    PIP_RETRIES=10 \
+    PIP_NO_CACHE_DIR=0 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_INDEX_URL=https://pypi.org/simple
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-compile poetry && \
     poetry config virtualenvs.create false && \
-    poetry install --only=main --no-root
+    poetry install --only main --no-interaction --no-ansi --no-root --sync
 
 COPY . .
 
