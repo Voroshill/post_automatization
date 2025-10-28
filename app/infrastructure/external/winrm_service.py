@@ -39,7 +39,8 @@ class WinRMService:
             )
 
             winrm_logger.info(f"Отправка скрипта на выполнение...")
-            result = session.run_ps(script)
+            # Важно: run_ps — блокирующий вызов; переносим в отдельный поток, чтобы не блокировать event loop
+            result = await asyncio.to_thread(session.run_ps, script)
             
             stdout = result.std_out.decode('utf-8', errors='ignore')
             stderr = result.std_err.decode('utf-8', errors='ignore')
