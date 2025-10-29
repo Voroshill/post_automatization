@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     smtp_username: Optional[str] = None
     smtp_password: Optional[str] = None
     smtp_use_ssl: bool = True
+    smtp_from: Optional[str] = None
     
     # 1C интеграция
     onec_endpoint: str = "/api/oneC/receive"

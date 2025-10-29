@@ -14,7 +14,7 @@ class WinRMService:
         self.password = settings.admin_password
         self.domain = getattr(settings, 'ad_domain', '')
         self.read_timeout_sec = getattr(settings, 'winrm_timeout', 30)
-        self.operation_timeout_sec = 10
+        self.operation_timeout_sec = 40  # Увеличено для SMTP операций
         
         winrm_logger.info(f"WinRMService инициализирован. Сервер: {self.server}:{self.port}")
     
@@ -40,7 +40,20 @@ class WinRMService:
 
             winrm_logger.info(f"Отправка скрипта на выполнение...")
             # Важно: run_ps — блокирующий вызов; переносим в отдельный поток, чтобы не блокировать event loop
-            result = await asyncio.to_thread(session.run_ps, script)
+            # Добавляем asyncio таймаут чтобы прервать зависшие операции (например SMTP)
+            try:
+                result = await asyncio.wait_for(
+                    asyncio.to_thread(session.run_ps, script),
+                    timeout=45.0  # Таймаут выше чем read_timeout_sec для возможности прерывания
+                )
+            except asyncio.TimeoutError:
+                winrm_logger.error(f"❌ WinRM операция превысила таймаут 45 секунд - возможно зависание SMTP")
+                return {
+                    "success": False,
+                    "stdout": "",
+                    "stderr": "WinRM operation timeout: SMTP send may have hung",
+                    "status_code": -1
+                }
             
             stdout = result.std_out.decode('utf-8', errors='ignore')
             stderr = result.std_err.decode('utf-8', errors='ignore')
@@ -196,23 +209,38 @@ class WinRMService:
             )
 
             safe_attachment = attachment_path or ""
-            # Определяем формат username: преобразуем UPN в domain\user формат (как в оригинале)
-            username_val = settings.smtp_username
+            # Формат SMTP логина и From
+            raw_username = settings.smtp_username or ""
+            username_val = raw_username
+            
+            # Для credentials в PowerShell нужен формат domain\user (как в оригинале PS.ps1)
+            # Если username это email - конвертируем в domain\user
             if "@" in username_val:
                 # Преобразуем UPN в domain\user: nikita.kopyti@central.st-ing.com -> central\nikita.kopyti
                 local_part = username_val.split("@")[0]
-                domain_part = username_val.split("@")[1] if "@" in username_val else settings.ad_domain
+                domain_part = username_val.split("@")[1]
                 # Извлекаем short domain name из FQDN: central.st-ing.com -> central
                 if "." in domain_part:
                     domain_name = domain_part.split(".")[0]
                 else:
                     domain_name = domain_part
                 username_val = f"{domain_name}\\{local_part}"
-                winrm_logger.info(f"SMTP username converted from UPN to domain\\user: {settings.smtp_username} -> {username_val}")
-            elif "\\" not in username_val:
+                winrm_logger.info(f"SMTP username converted from UPN to domain\\user: {raw_username} -> {username_val}")
+            elif "\\" not in username_val and settings.ad_domain:
                 # Если нет ни @ ни \, добавляем domain\
-                username_val = f"{settings.ad_domain}\\{username_val}"
+                short_domain = settings.ad_domain.split(".")[0]
+                username_val = f"{short_domain}\\{username_val}"
                 winrm_logger.info(f"SMTP username formatted as domain\\user: {username_val}")
+
+            # Определяем адрес отправителя: приоритет smtp_from, иначе используем email из username (для авторизации)
+            # Если username это email - используем его как From (сервер требует совпадения для auth)
+            if settings.smtp_from and "@" in settings.smtp_from:
+                from_addr = settings.smtp_from
+            elif "@" in raw_username:
+                from_addr = raw_username  # Используем authenticated email как From
+            else:
+                from_addr = "noreply@st-ing.com"
+            winrm_logger.info(f"SMTP From address: {from_addr} (using authenticated email for auth compatibility)")
             
             script = f"""
             Write-Host "[SMTP] Step 1: Preparing credentials"
@@ -221,43 +249,101 @@ class WinRMService:
             $User = "{username_val}"
             Write-Host "[SMTP] Step 2: Creating credential for user: $User"
             $Credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $User, $PWord
-            Write-Host "[SMTP] Step 3: Creating SMTP client"
-            $HUBTask = new-object net.mail.smtpclient($HUBServer)
-            $HUBTask.port = "{settings.smtp_port}"
-            Write-Host "[SMTP] Step 4: Setting credentials on SMTP client"
-            $HUBTask.Credentials = $Credential
-            # В оригинале PS.ps1 НЕТ EnableSsl - порт 465 может работать с неявным SSL
-            # НЕ устанавливаем EnableSsl явно, как в оригинале
+            Write-Host "[SMTP] Step 3: Prepared credentials and server info"
+            Write-Host "[SMTP] Server: $HUBServer"
+            Write-Host "[SMTP] Port: {settings.smtp_port}"
+            Write-Host "[SMTP] User: $User"
+            Write-Host "[SMTP] From: {from_addr}"
+            Write-Host "[SMTP] To: {to_email}"
+            Write-Host "[SMTP] About to start send job (will timeout in 20s if hangs)..."
             
-            Write-Host "[SMTP] Step 5: Creating mail message"
-            $EMail = new-object net.mail.mailmessage
-            $EMail.Subject = "{subject}"
-            $EMail.From = "noreply@st-ing.com"
-            $EMail.To.add("{to_email}")
-            $EMail.Body = @"
+            $tempmsg = @"
 {body}
 "@
             
-            $AttachmentPath = "{safe_attachment}"
-            if ($AttachmentPath -and $AttachmentPath -ne "None" -and (Test-Path $AttachmentPath)) {{
-                Write-Host "[SMTP] Step 6: Adding attachment"
-                $Attachment = New-Object System.Net.Mail.Attachment($AttachmentPath)
-                $EMail.Attachments.Add($Attachment)
+            # ДИАГНОСТИКА: Проверка доступности SMTP сервера
+            Write-Host "[SMTP] Testing connection to $HUBServer port {settings.smtp_port}..."
+            try {{
+                $testConnection = Test-NetConnection -ComputerName $HUBServer -Port {settings.smtp_port} -WarningAction SilentlyContinue -ErrorAction Stop
+                Write-Host "[SMTP] Test-NetConnection result: TcpTestSucceeded=$($testConnection.TcpTestSucceeded), RemoteAddress=$($testConnection.RemoteAddress)"
+            }} catch {{
+                Write-Host "[SMTP] WARNING: Test-NetConnection failed: $($_.Exception.Message)"
             }}
             
-            # В оригинале НЕТ Timeout, но добавим для безопасности
-            Write-Host "[SMTP] Step 7: Setting timeout on SMTP client (15s)"
-            $HUBTask.Timeout = 15000
-            Write-Host "[SMTP] Step 8: Attempting to send email (exactly like PS.ps1 - no try/catch)..."
-            Write-Host "[SMTP] Server: $HUBServer"
-            Write-Host "[SMTP] Port: {settings.smtp_port}"
-            Write-Host "[SMTP] EnableSsl: $($HUBTask.EnableSsl) (False as in PS.ps1)"
-            Write-Host "[SMTP] Timeout: $($HUBTask.Timeout)ms (added for safety)"
-            Write-Host "[SMTP] From: noreply@st-ing.com"
-            Write-Host "[SMTP] To: {to_email}"
+            # Проверка DNS резолюции
+            try {{
+                $dnsResult = Resolve-DnsName -Name $HUBServer -ErrorAction Stop
+                Write-Host "[SMTP] DNS resolution: $($dnsResult | Select-Object -First 1 | ForEach-Object {{ $_.IPAddress }})"
+            }} catch {{
+                Write-Host "[SMTP] WARNING: DNS resolution failed: $($_.Exception.Message)"
+            }}
             
-            # В оригинале PS.ps1 просто: $HUBTask.send($EMail) - БЕЗ try/catch
-            $HUBTask.send($EMail)
+            # Используем Job для отправки с таймаутом - если зависнет, сможем прервать
+            Write-Host "[SMTP] Starting send job..."
+            $sendJob = Start-Job -ScriptBlock {{
+                param($server, $port, $username, $password, $from, $to, $subject, $body, $useSsl)
+                
+                try {{
+                    Write-Host "[SMTP Job] Step 1: Creating credential"
+                    $PWord = ConvertTo-SecureString -String $password -AsPlainText -Force
+                    $Credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $username, $PWord
+                    
+                    Write-Host "[SMTP Job] Step 2: Creating SMTP client - Server=$server, Port=$port"
+                    $HUBTask = new-object net.mail.smtpclient($server)
+                    $HUBTask.port = $port
+                    # Порты 465 и 587 ОБЯЗАТЕЛЬНО требуют SSL
+                    if ($port -eq 465 -or $port -eq 587 -or $useSsl) {{
+                        $HUBTask.EnableSsl = $true
+                        Write-Host "[SMTP Job] Step 3: SSL enabled (required for port $port)"
+                    }} else {{
+                        Write-Host "[SMTP Job] Step 3: SSL disabled (port $port)"
+                    }}
+                    Write-Host "[SMTP Job] Step 4: Setting credentials for user: $username"
+                    $HUBTask.Credentials = $Credential
+                    Write-Host "[SMTP Job] Step 5: Setting timeout to 15s"
+                    $HUBTask.Timeout = 15000
+                    Write-Host "[SMTP Job] Step 6: Final config - EnableSsl=$($HUBTask.EnableSsl), Port=$($HUBTask.Port), Timeout=$($HUBTask.Timeout)ms"
+                    
+                    Write-Host "[SMTP Job] Step 7: Creating mail message"
+                    $EMail = new-object net.mail.mailmessage
+                    $EMail.Subject = $subject
+                    $EMail.From = $from
+                    $EMail.To.add($to)
+                    $EMail.Body = $body
+                    Write-Host "[SMTP Job] Step 8: Message created - From=$from, To=$to, Authenticated as=$username"
+                    Write-Host "[SMTP Job] Step 9: Calling Send() - ensure From matches authenticated user for auth..."
+                    $HUBTask.send($EMail)
+                    Write-Host "[SMTP Job] Step 10: Send completed successfully!"
+                    return "SUCCESS"
+                }} catch {{
+                    Write-Host "[SMTP Job] ERROR at step: $($_.Exception.Message)"
+                    Write-Host "[SMTP Job] Exception type: $($_.Exception.GetType().FullName)"
+                    Write-Host "[SMTP Job] Stack trace: $($_.ScriptStackTrace)"
+                    if ($_.Exception.InnerException) {{
+                        Write-Host "[SMTP Job] Inner exception: $($_.Exception.InnerException.Message)"
+                    }}
+                    return "ERROR: $($_.Exception.Message)"
+                }}
+            }} -ArgumentList $HUBServer, "{settings.smtp_port}", $User, "{settings.smtp_password}", "{from_addr}", "{to_email}", "{subject}", $tempmsg, $({str(getattr(settings, 'smtp_use_ssl', True)).lower()})
+            
+            Write-Host "[SMTP] Job started, waiting for result..."
+            
+            Write-Host "[SMTP] Waiting for send job (max 20 seconds)..."
+            $jobResult = Wait-Job -Job $sendJob -Timeout 20
+            
+            if ($jobResult) {{
+                $output = Receive-Job -Job $sendJob
+                Remove-Job -Job $sendJob
+                Write-Host "[SMTP] Job output: $output"
+                if ($output -like "*ERROR*") {{
+                    throw $output
+                }}
+            }} else {{
+                Stop-Job -Job $sendJob
+                Remove-Job -Job $sendJob
+                Write-Host "[SMTP] ERROR: Send job timed out after 20 seconds - SMTP server may be unreachable"
+                throw "SMTP send timeout - server may be unreachable or hung"
+            }}
             
             Write-Host "Email отправлен успешно"
             """
