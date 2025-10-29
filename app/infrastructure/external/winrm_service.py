@@ -13,8 +13,8 @@ class WinRMService:
         self.username = settings.admin_username
         self.password = settings.admin_password
         self.domain = getattr(settings, 'ad_domain', '')
-        self.read_timeout_sec = getattr(settings, 'winrm_timeout', 30)
-        self.operation_timeout_sec = 40  # Увеличено для SMTP операций
+        self.read_timeout_sec = getattr(settings, 'winrm_timeout', 60)  # Увеличено для SMTP операций
+        self.operation_timeout_sec = 30  # Должен быть меньше read_timeout_sec
         
         winrm_logger.info(f"WinRMService инициализирован. Сервер: {self.server}:{self.port}")
     
