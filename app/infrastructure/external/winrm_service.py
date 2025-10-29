@@ -215,18 +215,21 @@ class WinRMService:
                 winrm_logger.info(f"SMTP username formatted as domain\\user: {username_val}")
             
             script = f"""
+            Write-Host "[SMTP] Step 1: Preparing credentials"
             $HUBServer = "{settings.smtp_server}"
             $PWord = ConvertTo-SecureString -String "{settings.smtp_password}" -AsPlainText -Force
             $User = "{username_val}"
+            Write-Host "[SMTP] Step 2: Creating credential for user: $User"
             $Credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $User, $PWord
+            Write-Host "[SMTP] Step 3: Creating SMTP client"
             $HUBTask = new-object net.mail.smtpclient($HUBServer)
             $HUBTask.port = "{settings.smtp_port}"
+            Write-Host "[SMTP] Step 4: Setting credentials on SMTP client"
             $HUBTask.Credentials = $Credential
-            # Порт 465 обычно требует SSL
-            if ({settings.smtp_port} -eq 465) {{
-                $HUBTask.EnableSsl = $true
-            }}
+            # В оригинале PS.ps1 НЕТ EnableSsl - порт 465 может работать с неявным SSL
+            # НЕ устанавливаем EnableSsl явно, как в оригинале
             
+            Write-Host "[SMTP] Step 5: Creating mail message"
             $EMail = new-object net.mail.mailmessage
             $EMail.Subject = "{subject}"
             $EMail.From = "noreply@st-ing.com"
@@ -237,11 +240,25 @@ class WinRMService:
             
             $AttachmentPath = "{safe_attachment}"
             if ($AttachmentPath -and $AttachmentPath -ne "None" -and (Test-Path $AttachmentPath)) {{
+                Write-Host "[SMTP] Step 6: Adding attachment"
                 $Attachment = New-Object System.Net.Mail.Attachment($AttachmentPath)
                 $EMail.Attachments.Add($Attachment)
             }}
             
+            # В оригинале НЕТ Timeout, но добавим для безопасности
+            Write-Host "[SMTP] Step 7: Setting timeout on SMTP client (15s)"
+            $HUBTask.Timeout = 15000
+            Write-Host "[SMTP] Step 8: Attempting to send email (exactly like PS.ps1 - no try/catch)..."
+            Write-Host "[SMTP] Server: $HUBServer"
+            Write-Host "[SMTP] Port: {settings.smtp_port}"
+            Write-Host "[SMTP] EnableSsl: $($HUBTask.EnableSsl) (False as in PS.ps1)"
+            Write-Host "[SMTP] Timeout: $($HUBTask.Timeout)ms (added for safety)"
+            Write-Host "[SMTP] From: noreply@st-ing.com"
+            Write-Host "[SMTP] To: {to_email}"
+            
+            # В оригинале PS.ps1 просто: $HUBTask.send($EMail) - БЕЗ try/catch
             $HUBTask.send($EMail)
+            
             Write-Host "Email отправлен успешно"
             """
             

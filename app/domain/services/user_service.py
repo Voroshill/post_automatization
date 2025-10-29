@@ -143,13 +143,35 @@ class UserService:
             if not mailbox_result["success"]:
                 app_logger.warning(f"Ошибка создания почтового ящика: {mailbox_result['stderr']}")
             
-            confirmation_result = await self.exchange_service.send_confirmation_email(user_data, sam_account_name)
-            if not confirmation_result["success"]:
-                app_logger.warning(f"Ошибка отправки подтверждения: {confirmation_result['stderr']}")
+            # Отправка email с таймаутом - не блокируем approve если email зависнет
+            import asyncio
+            try:
+                confirmation_result = await asyncio.wait_for(
+                    self.exchange_service.send_confirmation_email(user_data, sam_account_name),
+                    timeout=25.0
+                )
+                if not confirmation_result["success"]:
+                    app_logger.warning(f"Ошибка отправки подтверждения: {confirmation_result.get('stderr', 'Unknown error')}")
+            except asyncio.TimeoutError:
+                app_logger.warning(f"Таймаут отправки подтверждения для {sam_account_name} (превышено 25 секунд)")
+                confirmation_result = {"success": False, "stderr": "Email send timeout"}
+            except Exception as e:
+                app_logger.warning(f"Исключение при отправке подтверждения: {e}")
+                confirmation_result = {"success": False, "stderr": str(e)}
             
-            welcome_result = await self.exchange_service.send_welcome_email(user_data, sam_account_name)
-            if not welcome_result["success"]:
-                app_logger.warning(f"Ошибка отправки приветственного письма: {welcome_result['stderr']}")
+            try:
+                welcome_result = await asyncio.wait_for(
+                    self.exchange_service.send_welcome_email(user_data, sam_account_name),
+                    timeout=25.0
+                )
+                if not welcome_result["success"]:
+                    app_logger.warning(f"Ошибка отправки приветственного письма: {welcome_result.get('stderr', 'Unknown error')}")
+            except asyncio.TimeoutError:
+                app_logger.warning(f"Таймаут отправки приветственного письма для {sam_account_name} (превышено 25 секунд)")
+                welcome_result = {"success": False, "stderr": "Email send timeout"}
+            except Exception as e:
+                app_logger.warning(f"Исключение при отправке приветственного письма: {e}")
+                welcome_result = {"success": False, "stderr": str(e)}
             
             return {
                 "success": True,
