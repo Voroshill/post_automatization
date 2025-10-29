@@ -263,9 +263,19 @@ class ExchangeService:
                     ]
                     exchange_logger.info(f"Username содержит \\: {login_username}, варианты: {username_variants}")
                 elif "@" in login_username:
-                    # Если это уже email - пробуем как есть
+                    # Если это уже email - пробуем как есть и доменные варианты
                     username_variants = [login_username]
-                    exchange_logger.info(f"Username в формате email: {login_username}")
+                    try:
+                        local_part, domain_full = login_username.split("@", 1)
+                        short_domain = (getattr(settings, 'ad_domain', '') or domain_full).split(".")[0]
+                        # Добавляем domain\user варианты (как в PS.ps1)
+                        username_variants.extend([
+                            f"{short_domain}\\{local_part}",
+                            f"{domain_full.split('.')[0]}\\{local_part}"
+                        ])
+                    except Exception:
+                        pass
+                    exchange_logger.info(f"Username в формате email: {login_username}, варианты: {username_variants}")
                 else:
                     # Если просто username без @ - пробуем добавить домен
                     username_variants = [
