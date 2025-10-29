@@ -371,7 +371,7 @@ async def approve_user(
         try:
             result = await asyncio.wait_for(
                 user_service._execute_creation_scripts(user),
-                timeout=20  
+                timeout=45  
             )
             
             if not result["success"]:
@@ -397,7 +397,7 @@ async def approve_user(
         except asyncio.TimeoutError:
             # Таймаут - откатываем статус
             await user_service.user_repository.update_status(user_id, UserStatus.PENDING)
-            api_logger.error(f"Таймаут создания учетных записей для пользователя {user_id} (превышено 20 секунд)")
+            api_logger.error(f"Таймаут создания учетных записей для пользователя {user_id} (превышено 45 секунд)")
             
             raise HTTPException(
                 status_code=500,
@@ -405,7 +405,7 @@ async def approve_user(
                     "success": False,
                     "error_type": "timeout",
                     "message": "Таймаут создания учетных записей",
-                    "details": "Процесс создания учетных записей занял слишком много времени (более 20 секунд). Попробуйте повторить операцию позже"
+                    "details": "Процесс создания учетных записей занял слишком много времени (более 45 секунд). Попробуйте повторить операцию позже"
                 }
             )
         
