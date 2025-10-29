@@ -408,13 +408,13 @@ class LDAPService:
             if exists_dn:
                 ldap_logger.info(f"Пользователь уже существует: {sam_account_name} -> {exists_dn}")
                 user_dn = exists_dn
-                
-                # Обновляем атрибуты существующего пользователя
+
+                # Обновляем атрибуты существующего пользователя (без изменения RDN/CN)
                 ldap_logger.info(f"Обновление атрибутов существующего пользователя...")
-                
-                # Подготавливаем атрибуты для обновления (исключаем неизменяемые атрибуты)
-                immutable_attrs = ['objectClass', 'userAccountControl', 'sAMAccountName', 'userPrincipalName']
-                
+
+                # Подготавливаем атрибуты для обновления (исключаем неизменяемые атрибуты и CN как RDN)
+                immutable_attrs = ['objectClass', 'userAccountControl', 'sAMAccountName', 'userPrincipalName', 'cn']
+
                 # Используем правильный формат для LDAP modify
                 changes = {}
                 for attr_name, attr_value in validated_attributes.items():
@@ -423,11 +423,11 @@ class LDAPService:
                         str(attr_value).strip() and
                         attr_name not in ['mail']):  # Исключаем mail, так как он может конфликтовать с UPN
                         changes[attr_name] = [(MODIFY_REPLACE, [str(attr_value).strip()])]
-                
+
                 ldap_logger.info(f"  Атрибуты для обновления: {len(changes)} атрибутов")
                 for attr_name, change_list in changes.items():
                     ldap_logger.info(f"    {attr_name}: {change_list[0][1][0]}")
-                
+
                 # Выполняем обновление атрибутов с правильным форматом
                 if changes:
                     success = conn.modify(user_dn, changes)
