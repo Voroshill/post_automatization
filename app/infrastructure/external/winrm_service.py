@@ -196,10 +196,23 @@ class WinRMService:
             )
 
             safe_attachment = attachment_path or ""
-            # Определяем формат username: если содержит @, используем как есть; иначе domain\user
+            # Определяем формат username: преобразуем UPN в domain\user формат (как в оригинале)
             username_val = settings.smtp_username
-            if "@" not in username_val and "\\" not in username_val:
+            if "@" in username_val:
+                # Преобразуем UPN в domain\user: nikita.kopyti@central.st-ing.com -> central\nikita.kopyti
+                local_part = username_val.split("@")[0]
+                domain_part = username_val.split("@")[1] if "@" in username_val else settings.ad_domain
+                # Извлекаем short domain name из FQDN: central.st-ing.com -> central
+                if "." in domain_part:
+                    domain_name = domain_part.split(".")[0]
+                else:
+                    domain_name = domain_part
+                username_val = f"{domain_name}\\{local_part}"
+                winrm_logger.info(f"SMTP username converted from UPN to domain\\user: {settings.smtp_username} -> {username_val}")
+            elif "\\" not in username_val:
+                # Если нет ни @ ни \, добавляем domain\
                 username_val = f"{settings.ad_domain}\\{username_val}"
+                winrm_logger.info(f"SMTP username formatted as domain\\user: {username_val}")
             
             script = f"""
             $HUBServer = "{settings.smtp_server}"
@@ -209,6 +222,10 @@ class WinRMService:
             $HUBTask = new-object net.mail.smtpclient($HUBServer)
             $HUBTask.port = "{settings.smtp_port}"
             $HUBTask.Credentials = $Credential
+            # Порт 465 обычно требует SSL
+            if ({settings.smtp_port} -eq 465) {{
+                $HUBTask.EnableSsl = $true
+            }}
             
             $EMail = new-object net.mail.mailmessage
             $EMail.Subject = "{subject}"
