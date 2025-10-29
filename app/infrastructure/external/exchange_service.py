@@ -6,6 +6,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 import smtplib
+from email.utils import formataddr
 from app.core.config.settings import settings
 from app.core.logging.logger import exchange_logger
 from app.infrastructure.external.winrm_service import WinRMService
@@ -139,8 +140,158 @@ class ExchangeService:
             exchange_logger.error(f"Трассировка: {traceback.format_exc()}")
             return {"success": False, "stderr": str(e)}
     
+    def _send_email_direct(self, to_email: str, subject: str, body: str, html: bool = False, cc: list = None) -> Dict[str, Any]:
+        """Прямая отправка email через Python smtplib (без WinRM)"""
+        try:
+            if not self.smtp_server or not self.smtp_port:
+                return {"success": False, "stderr": "SMTP server or port not configured"}
+            if not self.smtp_username or not self.smtp_password:
+                return {"success": False, "stderr": "SMTP credentials not configured"}
+            
+            exchange_logger.info(f"=== ОТПРАВКА EMAIL ЧЕРЕЗ SMTPLIB ===")
+            exchange_logger.info(f"SMTP сервер: {self.smtp_server}:{self.smtp_port}")
+            exchange_logger.info(f"Username: {self.smtp_username}")
+            
+            # From адрес всегда noreply@st-ing.com (как в оригинальном PS.ps1)
+            from_addr = getattr(settings, 'smtp_from', None) or "noreply@st-ing.com"
+            exchange_logger.info(f"From: {from_addr} -> To: {to_email}")
+            
+            # Создаем сообщение
+            if html:
+                msg = MIMEMultipart('alternative')
+                html_part = MIMEText(body, 'html', 'utf-8')
+                msg.attach(html_part)
+            else:
+                msg = MIMEText(body, 'plain', 'utf-8')
+            
+            msg['From'] = from_addr
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            
+            if cc:
+                msg['Cc'] = ', '.join(cc)
+            
+            # Подключение к SMTP серверу
+            use_ssl = getattr(settings, 'smtp_use_ssl', True)
+            use_tls = (self.smtp_port == 587)
+            
+            exchange_logger.info(f"Подключение к SMTP: порт={self.smtp_port}, SSL={use_ssl}, TLS={use_tls}")
+            
+            server = None
+            try:
+                if self.smtp_port == 465:
+                    # Порт 465 - используем SMTP_SSL (встроенный SSL)
+                    exchange_logger.info("Использование SMTP_SSL для порта 465")
+                    server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, timeout=30)
+                else:
+                    # Порт 587 или другой - используем STARTTLS
+                    exchange_logger.info(f"Использование SMTP с STARTTLS для порта {self.smtp_port}")
+                    server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=30)
+                    if use_tls or use_ssl:
+                        exchange_logger.info("Включение STARTTLS")
+                        server.starttls()
+                
+                # Авторизация
+                # В оригинальном PS.ps1 используется формат domain\username для авторизации
+                # Python smtplib может не поддерживать domain\username напрямую
+                # Пробуем разные варианты формата username
+                login_username = self.smtp_username
+                auth_success = False
+                
+                # Список вариантов username для попытки авторизации
+                username_variants = []
+                
+                # Если формат domain\user - пробуем разные варианты
+                if "\\" in login_username:
+                    domain_part, user_part = login_username.split("\\", 1)
+                    # Варианты для Exchange SMTP:
+                    # 1. Как есть (domain\user) - может не работать в Python smtplib
+                    # 2. Email формат: user@domain.st-ing.com
+                    # 3. Email формат: user@st-ing.com
+                    username_variants = [
+                        login_username,  # Пробуем как есть сначала
+                        f"{user_part}@{domain_part}.st-ing.com",
+                        f"{user_part}@st-ing.com",
+                        f"{user_part}@{domain_part}.central.st-ing.com",
+                        f"{domain_part}\\{user_part}"  # Еще раз пробуем с экранированием
+                    ]
+                    exchange_logger.info(f"Username содержит \\: {login_username}, варианты: {username_variants}")
+                elif "@" in login_username:
+                    # Если это уже email - пробуем как есть
+                    username_variants = [login_username]
+                    exchange_logger.info(f"Username в формате email: {login_username}")
+                else:
+                    # Если просто username без @ - пробуем добавить домен
+                    username_variants = [
+                        login_username,  # Пробуем как есть
+                        f"{login_username}@st-ing.com",
+                        f"{login_username}@central.st-ing.com"
+                    ]
+                    exchange_logger.info(f"Username без домена: {login_username}, варианты: {username_variants}")
+                
+                # Пробуем авторизоваться с каждым вариантом
+                last_error = None
+                for variant in username_variants:
+                    try:
+                        exchange_logger.info(f"Попытка авторизации: username={variant}")
+                        server.login(variant, self.smtp_password)
+                        exchange_logger.info(f"✅ Авторизация успешна с username={variant}")
+                        auth_success = True
+                        login_username = variant  # Сохраняем успешный вариант
+                        break
+                    except smtplib.SMTPAuthenticationError as e:
+                        last_error = e
+                        exchange_logger.warning(f"❌ Авторизация не удалась с username={variant}: {e}")
+                        continue
+                    except Exception as e:
+                        last_error = e
+                        exchange_logger.warning(f"❌ Ошибка при авторизации с username={variant}: {e}")
+                        continue
+                
+                if not auth_success:
+                    error_msg = f"Authentication failed with all username variants. Last error: {last_error}"
+                    exchange_logger.error(error_msg)
+                    raise smtplib.SMTPAuthenticationError(535, error_msg)
+                
+                # Отправка
+                recipients = [to_email]
+                if cc:
+                    recipients.extend(cc)
+                exchange_logger.info(f"Отправка сообщения получателям: {recipients}")
+                server.sendmail(from_addr, recipients, msg.as_string())
+                exchange_logger.info(f"Email успешно отправлен: {to_email}")
+                
+                return {"success": True, "stdout": f"Email sent successfully to {to_email}"}
+                
+            finally:
+                if server:
+                    try:
+                        server.quit()
+                    except:
+                        pass
+            
+        except smtplib.SMTPAuthenticationError as e:
+            error_msg = f"SMTP authentication failed: {e}"
+            exchange_logger.error(error_msg)
+            exchange_logger.error(f"Проверьте username ({self.smtp_username}) и password")
+            return {"success": False, "stderr": error_msg}
+        except smtplib.SMTPConnectError as e:
+            error_msg = f"SMTP connection failed: {e}"
+            exchange_logger.error(error_msg)
+            exchange_logger.error(f"Проверьте доступность сервера {self.smtp_server}:{self.smtp_port}")
+            return {"success": False, "stderr": error_msg}
+        except smtplib.SMTPException as e:
+            error_msg = f"SMTP error: {e}"
+            exchange_logger.error(error_msg)
+            return {"success": False, "stderr": error_msg}
+        except Exception as e:
+            exchange_logger.error(f"Ошибка отправки email через smtplib: {e}")
+            import traceback
+            exchange_logger.error(f"Трассировка: {traceback.format_exc()}")
+            return {"success": False, "stderr": str(e)}
+    
     async def send_confirmation_email(self, user_data: Dict[str, Any], sam_account_name: str) -> Dict[str, Any]:
-        """Отправка подтверждения приема (точно как в PS.ps1)"""
+        """Отправка подтверждения приема через Python smtplib"""
         try:
             exchange_logger.info(f"=== ОТПРАВКА ПОДТВЕРЖДЕНИЯ ПРИЕМА ===")
             exchange_logger.info(f"Пользователь: {sam_account_name}")
@@ -170,21 +321,27 @@ class ExchangeService:
 {mail_address} - почта
 {settings.default_user_password} - пароль для первого входа в учетную запись"""
             
-
+            # Отправляем через Python smtplib (без WinRM)
+            success_count = 0
             for recipient in recipients:
-                result = await self.winrm_service.send_smtp_email(
-                    to_email=recipient,
-                    subject=subject,
-                    body=body
+                result = await asyncio.to_thread(
+                    self._send_email_direct,
+                    recipient,
+                    subject,
+                    body,
+                    False
                 )
-                if not result["success"]:
+                if result["success"]:
+                    success_count += 1
+                else:
                     exchange_logger.warning(f"Ошибка отправки email на {recipient}: {result['stderr']}")
             
-            exchange_logger.info(f"Подтверждение приема отправлено для {sam_account_name}")
+            exchange_logger.info(f"Подтверждение приема отправлено для {sam_account_name} ({success_count}/{len(recipients)})")
             return {
-                "success": True,
+                "success": success_count > 0,
                 "stdout": f"Confirmation email sent successfully for {sam_account_name}",
-                "recipients_count": len(recipients)
+                "recipients_count": len(recipients),
+                "success_count": success_count
             }
             
         except Exception as e:
@@ -192,11 +349,10 @@ class ExchangeService:
             return {"success": False, "stderr": str(e)}
     
     async def send_welcome_email(self, user_data: Dict[str, Any], sam_account_name: str) -> Dict[str, Any]:
-        """Отправка приветственного письма с вложениями (точно как в PS.ps1)"""
+        """Отправка приветственного письма через Python smtplib"""
         try:
             exchange_logger.info(f"Отправка приветственного письма: {sam_account_name}")
             
-
             company = user_data.get('company', '')
             if any(keyword in company.upper() for keyword in ['STI', 'СТРОЙ', 'ТЕХНО', 'ИНЖЕНЕРИНГ']):
                 mail_address = f"{sam_account_name}@st-ing.com"
@@ -207,11 +363,10 @@ class ExchangeService:
             
             subject = f"Добро пожаловать в компанию! {user_data.get('firstname', '')} {user_data.get('secondname', '')} !"
             
-
             if user_data.get('technical') == 'technical':
-                cc_recipients = "sta@st-ing.com"
+                cc_recipients = ["sta@st-ing.com"]
             else:
-                cc_recipients = "sta@st-ing.com,den@st-ing.com,ian@st-ing.com,alek@st-ing.com,pave@st-ing.com,evge@st-ing.com,dmi@st-ing.com"
+                cc_recipients = ["sta@st-ing.com", "den@st-ing.com", "ian@st-ing.com", "alek@st-ing.com", "pave@st-ing.com", "evge@st-ing.com", "dmi@st-ing.com"]
             
             html_body = """
             <html>
@@ -229,67 +384,23 @@ class ExchangeService:
             </html>
             """
             
-
-            attachments = [
-                "C:/www/email_files/Инструкция по управлению почтой СТИ.docx",
-                "C:/www/email_files/Welcomebook STI.pdf", 
-                "C:/www/email_files/Инструкция по ServiceDesk.docx"
-            ]
-            
-
-            script = f"""
-            $From = "{self.smtp_username}"
-            $To = "{mail_address}"
-            $Subject = "{subject}"
-            $Body = @"
-{html_body}
-"@
-            $SMTPServer = "{self.smtp_server}"
-            $SMTPPort = {self.smtp_port}
-            $Username = "{self.smtp_username}"
-            $Password = "{self.smtp_password}"
-            
-            $SecurePassword = ConvertTo-SecureString -String $Password -AsPlainText -Force
-            $Credential = New-Object System.Management.Automation.PSCredential($Username, $SecurePassword)
-            
-            $MailMessage = New-Object System.Net.Mail.MailMessage($From, $To, $Subject, $Body)
-            $MailMessage.IsBodyHtml = $true
-            $MailMessage.CC.Add("{cc_recipients}")
-            
-            # Добавление вложений
-            $attachments = @(
-                "C:/www/email_files/Инструкция по управлению почтой СТИ.docx",
-                "C:/www/email_files/Welcomebook STI.pdf", 
-                "C:/www/email_files/Инструкция по ServiceDesk.docx"
+            # Отправляем через Python smtplib (без WinRM)
+            # Примечание: вложения находятся на Windows сервере и недоступны напрямую
+            # Если нужны вложения - можно добавить через WinRM только чтение файлов
+            result = await asyncio.to_thread(
+                self._send_email_direct,
+                mail_address,
+                subject,
+                html_body,
+                True,
+                cc_recipients
             )
-            
-            foreach ($attachment in $attachments) {{
-                if (Test-Path $attachment) {{
-                    $Attachment = New-Object System.Net.Mail.Attachment($attachment)
-                    $MailMessage.Attachments.Add($Attachment)
-                    Write-Host "Attachment added: $attachment"
-                }} else {{
-                    Write-Host "Attachment not found: $attachment"
-                }}
-            }}
-            
-            $SmtpClient = New-Object System.Net.Mail.SmtpClient($SMTPServer, $SMTPPort)
-            $SmtpClient.EnableSsl = $true
-            $SmtpClient.Credentials = $Credential
-            
-            $SmtpClient.Send($MailMessage)
-            
-            Write-Host "Welcome email sent successfully"
-            """
-            
-            result = await self.winrm_service.execute_powershell(script)
             
             if result["success"]:
                 exchange_logger.info(f"Приветственное письмо отправлено для {sam_account_name}")
                 return {
                     "success": True,
-                    "stdout": f"Welcome email sent successfully for {sam_account_name}",
-                    "attachments_count": len(attachments)
+                    "stdout": f"Welcome email sent successfully for {sam_account_name}"
                 }
             else:
                 exchange_logger.error(f"Ошибка отправки приветственного письма: {result['stderr']}")
