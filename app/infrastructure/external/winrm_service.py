@@ -176,6 +176,25 @@ class WinRMService:
     async def send_smtp_email(self, to_email: str, subject: str, body: str, attachment_path: str = None) -> Dict[str, Any]:
         """Отправка email через SMTP на Windows сервере"""
         try:
+            # Валидация SMTP параметров
+            if not settings.smtp_server or not str(settings.smtp_server).strip():
+                winrm_logger.error("SMTP server is not configured")
+                return {"success": False, "stderr": "SMTP server is not configured"}
+            if not settings.smtp_port:
+                winrm_logger.error("SMTP port is not configured")
+                return {"success": False, "stderr": "SMTP port is not configured"}
+            if not settings.smtp_username or not str(settings.smtp_username).strip():
+                winrm_logger.error("SMTP username is not configured")
+                return {"success": False, "stderr": "SMTP username is not configured"}
+            if not settings.smtp_password or not str(settings.smtp_password).strip():
+                winrm_logger.error("SMTP password is not configured")
+                return {"success": False, "stderr": "SMTP password is not configured"}
+
+            # Диагностика (без пароля)
+            winrm_logger.info(
+                f"SMTP config: server={settings.smtp_server}, port={settings.smtp_port}, username={settings.smtp_username}, use_ssl={getattr(settings, 'smtp_use_ssl', True)}"
+            )
+
             safe_attachment = attachment_path or ""
             script = f"""
             $From = "{settings.smtp_username}"
@@ -188,6 +207,7 @@ class WinRMService:
             $SMTPPort = {settings.smtp_port}
             $Username = "{settings.smtp_username}"
             $Password = "{settings.smtp_password}"
+            $UseSsl = $({str(getattr(settings, 'smtp_use_ssl', True)).lower()})
             
             $SecurePassword = ConvertTo-SecureString -String $Password -AsPlainText -Force
             $Credential = New-Object System.Management.Automation.PSCredential($Username, $SecurePassword)
@@ -202,7 +222,7 @@ class WinRMService:
             }}
             
             $SmtpClient = New-Object System.Net.Mail.SmtpClient($SMTPServer, $SMTPPort)
-            $SmtpClient.EnableSsl = $true
+            $SmtpClient.EnableSsl = $UseSsl
             $SmtpClient.Credentials = $Credential
             
             $SmtpClient.Send($MailMessage)
