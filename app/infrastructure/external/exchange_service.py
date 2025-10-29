@@ -176,20 +176,66 @@ class ExchangeService:
             use_tls = (self.smtp_port == 587)
             
             exchange_logger.info(f"Подключение к SMTP: порт={self.smtp_port}, SSL={use_ssl}, TLS={use_tls}")
-            
+
+            # Автоматические попытки подключения: Exchange может требовать STARTTLS даже на порту 465
+            # Пробуем разные варианты подключения
+            connection_attempts = []
+            if self.smtp_port == 465:
+                # Для порта 465 пробуем: STARTTLS на 465, затем SSL на 465, затем STARTTLS на 587
+                connection_attempts = [
+                    (self.smtp_server, 465, "STARTTLS"),  # Сначала обычное подключение с STARTTLS
+                    (self.smtp_server, 465, "SSL"),       # Затем прямой SSL
+                    (self.smtp_server, 587, "STARTTLS"),  # Фоллбек на 587
+                    (self.smtp_server, 25, "PLAIN")       # Последний вариант - порт 25
+                ]
+            elif self.smtp_port == 587:
+                connection_attempts = [
+                    (self.smtp_server, 587, "STARTTLS"),
+                    (self.smtp_server, 465, "STARTTLS"),  # 465 тоже через STARTTLS
+                    (self.smtp_server, 465, "SSL"),
+                    (self.smtp_server, 25, "PLAIN")
+                ]
+            else:
+                connection_attempts = [
+                    (self.smtp_server, self.smtp_port, "AUTO"),
+                    (self.smtp_server, 587, "STARTTLS"),
+                    (self.smtp_server, 465, "STARTTLS"),
+                    (self.smtp_server, 465, "SSL"),
+                    (self.smtp_server, 25, "PLAIN")
+                ]
+
             server = None
+            last_connect_error = None
             try:
-                if self.smtp_port == 465:
-                    # Порт 465 - используем SMTP_SSL (встроенный SSL)
-                    exchange_logger.info("Использование SMTP_SSL для порта 465")
-                    server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, timeout=30)
-                else:
-                    # Порт 587 или другой - используем STARTTLS
-                    exchange_logger.info(f"Использование SMTP с STARTTLS для порта {self.smtp_port}")
-                    server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=30)
-                    if use_tls or use_ssl:
-                        exchange_logger.info("Включение STARTTLS")
-                        server.starttls()
+                for host, port, mode in connection_attempts:
+                    try:
+                        exchange_logger.info(f"Пробую подключиться: {host}:{port} режим={mode}")
+                        if mode == "SSL":
+                            server = smtplib.SMTP_SSL(host, port, timeout=30)
+                            server.ehlo()
+                        else:
+                            server = smtplib.SMTP(host, port, timeout=30)
+                            server.ehlo()
+                            if mode in ("STARTTLS", "AUTO"):
+                                exchange_logger.info("Включение STARTTLS")
+                                server.starttls()
+                                server.ehlo()
+                        # Если дошли сюда без исключений — подключение успешно
+                        exchange_logger.info(f"SMTP подключение установлено: {host}:{port} ({mode})")
+                        break
+                    except Exception as ce:
+                        last_connect_error = ce
+                        exchange_logger.warning(f"Не удалось подключиться {host}:{port} ({mode}): {ce}")
+                        # Закрываем и пробуем следующий вариант
+                        if server:
+                            try:
+                                server.quit()
+                            except:
+                                pass
+                        server = None
+                        continue
+                if not server:
+                    raise last_connect_error or Exception("SMTP connection attempts failed")
                 
                 # Авторизация
                 # В оригинальном PS.ps1 используется формат domain\username для авторизации
