@@ -232,7 +232,13 @@ class LDAPService:
             
             ldap_logger.info(f"  Организационная единица: {ou}")
             
-            display_name = f"{user_data.get('firstname', '')} {user_data.get('secondname', '')} {user_data.get('thirdname', '')}"
+            # Строим отображаемое имя без лишних пробелов
+            name_parts = [
+                (user_data.get('firstname', '') or '').strip(),
+                (user_data.get('secondname', '') or '').strip(),
+                (user_data.get('thirdname', '') or '').strip(),
+            ]
+            display_name = ' '.join([p for p in name_parts if p])
             
             # Сначала проверяем длину OU и сокращаем CN соответственно
             ou_length = len(ou)
@@ -248,16 +254,17 @@ class LDAPService:
                 ldap_logger.warning(f"  CN слишком длинный ({len(cn_name)} символов), сокращаем")
                 
                 # Сначала пробуем только имя и фамилию
-                firstname = user_data.get('firstname', '')
-                secondname = user_data.get('secondname', '')
-                cn_name = f"{firstname} {secondname}"
+                firstname = (user_data.get('firstname', '') or '').strip()
+                secondname = (user_data.get('secondname', '') or '').strip()
+                cn_name = ' '.join([p for p in [firstname, secondname] if p])
                 
                 if len(cn_name) > max_cn_length:
                     # Если и это слишком длинное, сокращаем каждую часть
                     firstname_len = min(len(firstname), max_cn_length // 2)
-                    secondname_len = min(len(secondname), max_cn_length - firstname_len - 1)
+                    secondname_len = min(len(secondname), max_cn_length - firstname_len - (1 if firstname_len and secondname else 0))
                     
-                    cn_name = f"{firstname[:firstname_len]} {secondname[:secondname_len]}"
+                    cn_join = ' ' if firstname_len and secondname_len else ''
+                    cn_name = f"{firstname[:firstname_len]}{cn_join}{secondname[:secondname_len]}".strip()
                     
                     # Если все еще слишком длинное, используем только имя
                     if len(cn_name) > max_cn_length:
@@ -265,7 +272,26 @@ class LDAPService:
                         
                     ldap_logger.warning(f"  CN сокращен до: '{cn_name}' ({len(cn_name)} символов)")
             
-            user_dn = f"CN={cn_name},{ou}"
+            # Экранируем значение RDN согласно RFC 4514 (для DN используем экранированное, для атрибутов — исходное значение)
+            def _escape_rdn_value(val: str) -> str:
+                v = (val or '')
+                # Сначала экранируем обратную косую черту
+                v = v.replace('\\', '\\\\')
+                # Затем остальные спецсимволы RDN
+                for ch in [',', '+', '"', '<', '>', ';', '=']:
+                    v = v.replace(ch, f"\\{ch}")
+                # Экранируем ведущий пробел или #
+                if v.startswith(' '):
+                    v = '\\ ' + v[1:]
+                if v.startswith('#'):
+                    v = '\\#' + v[1:]
+                # Экранируем замыкающий пробел
+                if v.endswith(' '):
+                    v = v[:-1] + '\\ '
+                return v
+
+            escaped_cn_for_dn = _escape_rdn_value(cn_name)
+            user_dn = f"CN={escaped_cn_for_dn},{ou}"
             ldap_logger.info(f"  Distinguished Name: {user_dn}")
             
             # Финальная проверка длины DN
