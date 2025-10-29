@@ -244,28 +244,50 @@ export default {
       processing.value = true
       try {
         console.log('Approving user:', userId)
-        await userService.approveUser(userId)
+        const result = await userService.approveUser(userId)
         
-        // Добавляем уведомление о начале создания учетных записей
-        if (!activeNotifications.value) {
-          activeNotifications.value = []
+        // Проверяем статус из ответа
+        const userStatus = result?.status
+        console.log('Approve response:', result)
+        console.log('Approve response status:', userStatus)
+        
+        if (userStatus === 'approved') {
+          // Уже одобрен - обновляем сразу
+          updateUserStatus(userId, 'approved')
+          actionResults.value[userId] = 'Добавлен'
+          showAlert('Пользователь успешно создан!', 'success')
+          // Удаляем пользователя из списка через 2 секунды
+          setTimeout(() => {
+            const userIndex = users.value.findIndex(user => user.id === userId)
+            if (userIndex !== -1) {
+              users.value.splice(userIndex, 1)
+            }
+            delete actionResults.value[userId]
+          }, 2000)
+        } else {
+          // В процессе создания - показываем уведомление
+          if (!activeNotifications.value) {
+            activeNotifications.value = []
+          }
+          activeNotifications.value.push({
+            userId: userId,
+            status: 'creating'
+          })
+          
+          console.log('Added notification:', activeNotifications.value)
+          showAlert('Пользователь одобрен, создание учетных записей запущено', 'info')
+          // Показываем результат действия
+          actionResults.value[userId] = 'Создание...'
+          // Обновляем статус пользователя в массиве
+          updateUserStatus(userId, 'creating')
         }
-        activeNotifications.value.push({
-          userId: userId,
-          status: 'creating'
-        })
-        
-        console.log('Added notification:', activeNotifications.value)
-        showAlert('Пользователь одобрен, создание учетных записей запущено', 'info')
-        // Показываем результат действия
-        actionResults.value[userId] = 'Создание...'
-        // Обновляем статус пользователя в массиве
-        updateUserStatus(userId, 'creating')
         console.log('Action result set:', actionResults.value)
-        // Пользователь исчезнет только после перезагрузки страницы
       } catch (error) {
         console.error('Ошибка создания пользователя:', error)
         showAlert('Ошибка создания пользователя', 'danger')
+        // Откатываем статус при ошибке
+        updateUserStatus(userId, 'pending')
+        delete actionResults.value[userId]
       } finally {
         processing.value = false
       }
@@ -1026,6 +1048,15 @@ export default {
                   const index = activeNotifications.value.findIndex(n => n.userId === notification.userId)
                   if (index !== -1) {
                     activeNotifications.value[index].status = data.status
+                  }
+                  // Обновляем статус пользователя в массиве
+                  updateUserStatus(notification.userId, data.status)
+                  // Очищаем actionResult если статус approved/rejected
+                  if (data.status === 'approved') {
+                    actionResults.value[notification.userId] = 'Добавлен'
+                  } else if (data.status === 'pending') {
+                    // Откат к pending - показываем ошибку
+                    actionResults.value[notification.userId] = 'Ошибка'
                   }
                 }
               }).catch(error => {
