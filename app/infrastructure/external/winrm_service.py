@@ -196,37 +196,35 @@ class WinRMService:
             )
 
             safe_attachment = attachment_path or ""
+            # Определяем формат username: если содержит @, используем как есть; иначе domain\user
+            username_val = settings.smtp_username
+            if "@" not in username_val and "\\" not in username_val:
+                username_val = f"{settings.ad_domain}\\{username_val}"
+            
             script = f"""
-            $From = "{settings.smtp_username}"
-            $To = "{to_email}"
-            $Subject = "{subject}"
-            $Body = @"
+            $HUBServer = "{settings.smtp_server}"
+            $PWord = ConvertTo-SecureString -String "{settings.smtp_password}" -AsPlainText -Force
+            $User = "{username_val}"
+            $Credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $User, $PWord
+            $HUBTask = new-object net.mail.smtpclient($HUBServer)
+            $HUBTask.port = "{settings.smtp_port}"
+            $HUBTask.Credentials = $Credential
+            
+            $EMail = new-object net.mail.mailmessage
+            $EMail.Subject = "{subject}"
+            $EMail.From = "noreply@st-ing.com"
+            $EMail.To.add("{to_email}")
+            $EMail.Body = @"
 {body}
 "@
-            $SMTPServer = "{settings.smtp_server}"
-            $SMTPPort = {settings.smtp_port}
-            $Username = "{settings.smtp_username}"
-            $Password = "{settings.smtp_password}"
-            $UseSsl = $({str(getattr(settings, 'smtp_use_ssl', True)).lower()})
-            
-            $SecurePassword = ConvertTo-SecureString -String $Password -AsPlainText -Force
-            $Credential = New-Object System.Management.Automation.PSCredential($Username, $SecurePassword)
-            
-            $MailMessage = New-Object System.Net.Mail.MailMessage($From, $To, $Subject, $Body)
-            $MailMessage.IsBodyHtml = $false
             
             $AttachmentPath = "{safe_attachment}"
             if ($AttachmentPath -and $AttachmentPath -ne "None" -and (Test-Path $AttachmentPath)) {{
                 $Attachment = New-Object System.Net.Mail.Attachment($AttachmentPath)
-                $MailMessage.Attachments.Add($Attachment)
+                $EMail.Attachments.Add($Attachment)
             }}
             
-            $SmtpClient = New-Object System.Net.Mail.SmtpClient($SMTPServer, $SMTPPort)
-            $SmtpClient.EnableSsl = $UseSsl
-            $SmtpClient.Credentials = $Credential
-            
-            $SmtpClient.Send($MailMessage)
-            
+            $HUBTask.send($EMail)
             Write-Host "Email отправлен успешно"
             """
             
