@@ -702,17 +702,14 @@ class LDAPService:
             
             user = conn.entries[0]
             sam_account_name = user.sAMAccountName.value
-            # Безопасно определяем текущий DN
+            # Безопасно определяем текущий DN (с гарантированной инициализацией)
             current_dn = None
-            try:
-                current_dn = user.entry_dn
-            except Exception:
-                pass
+            # entry_dn чаще всего доступен у python-ldap3
+            current_dn = getattr(user, 'entry_dn', None)
             if not current_dn:
-                try:
-                    current_dn = user.distinguishedName.value
-                except Exception:
-                    current_dn = None
+                # distinguishedName может отсутствовать в attributes, поэтому берём через getattr(value, None)
+                dn_attr = getattr(user, 'distinguishedName', None)
+                current_dn = getattr(dn_attr, 'value', None)
             
             if hasattr(user, 'memberOf') and user.memberOf:
                 for group_dn in user.memberOf.values:
@@ -984,8 +981,8 @@ class LDAPService:
 
             # Перезаписываем pager на актуальный unique_id (как в PowerShell)
             try:
-                conn.modify(current_dn, {'pager': [(MODIFY_REPLACE, [unique_id]) ]})
-                if conn.result['result'] == 0:
+                conn.modify(current_dn, {'pager': [(MODIFY_REPLACE, [unique_id])]})
+                if conn.result.get('result') == 0:
                     ldap_logger.info("Атрибут pager синхронизирован с unique_id")
                 else:
                     ldap_logger.warning(f"Не удалось обновить pager: {conn.result}")
@@ -997,7 +994,7 @@ class LDAPService:
             try:
                 rdn = current_dn.split(",", 1)[0]  # например, CN=ФИО
                 conn.modify_dn(current_dn, rdn, new_superior=target_ou)
-                if conn.result['result'] == 0:
+                if conn.result.get('result') == 0:
                     current_dn = f"{rdn},{target_ou}"
                     moved_ok = True
                     ldap_logger.info(f"Перемещен в OU: {target_ou}")
