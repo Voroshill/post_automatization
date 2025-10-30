@@ -702,6 +702,13 @@ class LDAPService:
             
             user = conn.entries[0]
             sam_account_name = user.sAMAccountName.value
+            # Определяем DN пользователя надёжно
+            current_dn = getattr(user, 'entry_dn', None)
+            if not current_dn:
+                dn_attr = getattr(user, 'distinguishedName', None)
+                current_dn = getattr(dn_attr, 'value', None)
+            if current_dn:
+                ldap_logger.info(f"Текущий DN пользователя: {current_dn}")
             # Безопасно определяем текущий DN (с гарантированной инициализацией)
             current_dn = None
             # entry_dn чаще всего доступен у python-ldap3
@@ -715,7 +722,7 @@ class LDAPService:
                 for group_dn in user.memberOf.values:
                     try:
                         conn.extend.microsoft.remove_members_from_groups(
-                            sam_account_name,
+                            current_dn or sam_account_name,
                             group_dn
                         )
                         ldap_logger.info(f"Удален из группы: {group_dn}")
@@ -954,7 +961,7 @@ class LDAPService:
                 for group_dn in user.memberOf.values:
                     try:
                         conn.extend.microsoft.remove_members_from_groups(
-                            sam_account_name,
+                            current_dn or sam_account_name,
                             group_dn
                         )
                         ldap_logger.info(f"Удален из группы: {group_dn}")
