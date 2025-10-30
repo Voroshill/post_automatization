@@ -702,6 +702,7 @@ class LDAPService:
             
             user = conn.entries[0]
             sam_account_name = user.sAMAccountName.value
+            current_dn = user.entry_dn
             
             if hasattr(user, 'memberOf') and user.memberOf:
                 for group_dn in user.memberOf.values:
@@ -951,22 +952,37 @@ class LDAPService:
                     except Exception as e:
                         ldap_logger.warning(f"Ошибка удаления из группы {group_dn}: {e}")
             
+            # Отключаем учетную запись по текущему DN (идемпотентно)
+            try:
+                conn.modify(
+                    current_dn,
+                    {'userAccountControl': [(MODIFY_REPLACE, ['2'])]}  # ACCOUNTDISABLE
+                )
+                if conn.result['result'] == 0:
+                    ldap_logger.info("Учетная запись отключена (ACCOUNTDISABLE)")
+                else:
+                    ldap_logger.warning(f"Не удалось отключить учетную запись: {conn.result}")
+            except Exception as e:
+                ldap_logger.warning(f"Ошибка отключения учетной записи: {e}")
+
+            # Перемещаем в OU "Уволенные сотрудники" с сохранением RDN
             target_ou = "OU=Уволенные сотрудники,DC=central,DC=st-ing,DC=com"
             try:
+                rdn = current_dn.split(",", 1)[0]  # например, CN=ФИО
                 conn.modify_dn(
-                    user.distinguishedName.value,
-                    f"CN={sam_account_name}",
+                    current_dn,
+                    rdn,
                     new_superior=target_ou
                 )
-                ldap_logger.info(f"Перемещен в OU: {target_ou}")
+                if conn.result['result'] == 0:
+                    current_dn = f"{rdn},{target_ou}"
+                    ldap_logger.info(f"Перемещен в OU: {target_ou}")
+                else:
+                    ldap_logger.warning(f"Не удалось переместить объект: {conn.result}")
             except Exception as e:
                 ldap_logger.warning(f"Ошибка перемещения в OU: {e}")
             
-            conn.modify(
-                user.entry_dn,
-                {'userAccountControl': [(MODIFY_REPLACE, ['2'])]}  # ACCOUNTDISABLE
-            )
-            
+            # Финальная проверка
             if conn.result['result'] == 0:
                 ldap_logger.info(f"Пользователь {sam_account_name} полностью заблокирован через LDAP")
                 return {"success": True, "stdout": f"User {sam_account_name} completely blocked"}
