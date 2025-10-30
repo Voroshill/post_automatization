@@ -93,9 +93,10 @@ async def create_user_manually(
             elif str(raw_technical).strip().lower() in ['false', '0', 'no', '']:
                 normalized = 0
         if normalized is None:
-            if is_engeneer_value in ['0', '']:
+            val = str(is_engeneer_value).strip().lower()
+            if val in ['0', 'false', 'no', 'none', '']:
                 normalized = 0
-            elif is_engeneer_value == '1':
+            elif val in ['1', 'true', 'yes']:
                 normalized = 1
         user_dict["is_engineer"] = normalized if normalized is not None else None
         
