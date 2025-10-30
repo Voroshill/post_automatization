@@ -979,12 +979,41 @@ class LDAPService:
             
             user = conn.entries[0]
             sam_account_name = user.sAMAccountName.value
+            # Надёжно определяем DN пользователя
+            current_dn = getattr(user, 'entry_dn', None)
+            if not current_dn:
+                try:
+                    current_dn = user.entry_dn
+                except Exception:
+                    pass
+            if not current_dn:
+                dn_attr = getattr(user, 'distinguishedName', None)
+                current_dn = getattr(dn_attr, 'value', None)
+            if not current_dn and getattr(conn, 'response', None):
+                try:
+                    current_dn = (conn.response or [{}])[0].get('dn')
+                except Exception:
+                    pass
+            if not current_dn and sam_account_name:
+                try:
+                    conn.search(
+                        'DC=central,DC=st-ing,DC=com',
+                        f'(sAMAccountName={sam_account_name})',
+                        attributes=['distinguishedName']
+                    )
+                    if conn.entries:
+                        current_dn = getattr(conn.entries[0].distinguishedName, 'value', None)
+                except Exception as e:
+                    ldap_logger.warning(f"Фоллбэк-поиск DN по sAMAccountName завершился ошибкой: {e}")
+            if current_dn:
+                ldap_logger.info(f"Текущий DN пользователя: {current_dn}")
 
-            if hasattr(user, 'memberOf') and user.memberOf:
+            # Удаляем из групп только при известном DN
+            if current_dn and hasattr(user, 'memberOf') and user.memberOf:
                 for group_dn in user.memberOf.values:
                     try:
                         conn.extend.microsoft.remove_members_from_groups(
-                            current_dn or sam_account_name,
+                            current_dn,
                             group_dn
                         )
                         ldap_logger.info(f"Удален из группы: {group_dn}")
