@@ -126,7 +126,9 @@ class UserService:
                 'work_phone': user.work_phone,
                 'current_location_id': user.current_location_id,
                 'boss_id': user.boss_id,
-                'is_engineer': user.is_engineer
+                'is_engineer': user.is_engineer,
+                # Флаг technical для паритета со скриптами: 'technical' если is_engineer == 1
+                'technical': 'technical' if user.is_engineer == 1 else ''
             }
             
             ad_result = await self.ldap_service.create_user_in_ad(user_data)

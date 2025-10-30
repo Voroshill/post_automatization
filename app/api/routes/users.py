@@ -71,21 +71,24 @@ async def create_user_manually(
         api_logger.info(f"Ручное создание пользователя: {user_data.unique}")
         
         user_dict = user_data.model_dump()
-        user_dict["unique_id"] = user_dict.pop("unique")
-        user_dict["department"] = user_dict.pop("Department")
-        user_dict["otdel"] = user_dict.pop("Otdel")
-        user_dict["mobile_phone"] = user_dict.pop("MobilePhone")
-        user_dict["work_phone"] = user_dict.pop("WorkPhone")
-        user_dict["birth_date"] = user_dict.pop("BirthDate")
-        # Правильно обрабатываем is_engeneer: '0' -> 0, '1' -> 1, пустая строка -> None
-        is_engeneer_value = user_dict.pop("is_engeneer")
+        # Разрешаем как PascalCase, так и snake_case ключи из фронтенда
+        user_dict["unique_id"] = user_dict.pop("unique", user_dict.get("unique_id"))
+        user_dict["department"] = user_dict.pop("Department", user_dict.get("department"))
+        user_dict["otdel"] = user_dict.pop("Otdel", user_dict.get("otdel"))
+        user_dict["mobile_phone"] = user_dict.pop("MobilePhone", user_dict.get("mobile_phone"))
+        user_dict["work_phone"] = user_dict.pop("WorkPhone", user_dict.get("work_phone"))
+        user_dict["birth_date"] = user_dict.pop("BirthDate", user_dict.get("birth_date"))
+        user_dict["upload_date"] = user_dict.pop("UploadDate", user_dict.get("upload_date"))
+        # Правильно обрабатываем is_engeneer/is_engineer: '0' -> 0, '1' -> 1, пустая строка -> None
+        is_engeneer_value = user_dict.pop("is_engeneer", user_dict.pop("is_engineer", ''))
         if is_engeneer_value in ['0', '']:
             user_dict["is_engineer"] = 0
         elif is_engeneer_value == '1':
             user_dict["is_engineer"] = 1
         else:
             user_dict["is_engineer"] = None
-        user_dict["upload_date"] = user_dict.pop("UploadDate")
+        # Выставляем флаг technical как в скриптах PS.ps1
+        user_dict["technical"] = "technical" if user_dict.get("is_engineer") == 1 else ""
         
         user_dict["status"] = UserStatus.PENDING
         
