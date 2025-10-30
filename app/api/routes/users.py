@@ -79,16 +79,25 @@ async def create_user_manually(
         user_dict["work_phone"] = user_dict.pop("WorkPhone", user_dict.get("work_phone"))
         user_dict["birth_date"] = user_dict.pop("BirthDate", user_dict.get("birth_date"))
         user_dict["upload_date"] = user_dict.pop("UploadDate", user_dict.get("upload_date"))
-        # Правильно обрабатываем is_engeneer/is_engineer: '0' -> 0, '1' -> 1, пустая строка -> None
+        # Принимаем technical/is_engeneer/is_engineer и маппим в is_engineer = 0/1
+        raw_technical = user_dict.pop("technical", user_dict.pop("Technical", None))
         is_engeneer_value = user_dict.pop("is_engeneer", user_dict.pop("is_engineer", ''))
-        if is_engeneer_value in ['0', '']:
-            user_dict["is_engineer"] = 0
-        elif is_engeneer_value == '1':
-            user_dict["is_engineer"] = 1
-        else:
-            user_dict["is_engineer"] = None
-        # Выставляем флаг technical как в скриптах PS.ps1
-        user_dict["technical"] = "technical" if user_dict.get("is_engineer") == 1 else ""
+        # Нормализуем значение
+        normalized = None
+        if raw_technical is not None:
+            # technical может быть True/False или строкой ('technical','true','1')
+            if isinstance(raw_technical, bool):
+                normalized = 1 if raw_technical else 0
+            elif str(raw_technical).strip().lower() in ['technical', 'true', '1', 'yes']:
+                normalized = 1
+            elif str(raw_technical).strip().lower() in ['false', '0', 'no', '']:
+                normalized = 0
+        if normalized is None:
+            if is_engeneer_value in ['0', '']:
+                normalized = 0
+            elif is_engeneer_value == '1':
+                normalized = 1
+        user_dict["is_engineer"] = normalized if normalized is not None else None
         
         user_dict["status"] = UserStatus.PENDING
         
