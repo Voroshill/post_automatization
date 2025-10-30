@@ -25,7 +25,7 @@ app.add_middleware(LoggingMiddleware)
 
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(auth.router, prefix="/api/users", tags=["authentication"])
-app.include_router(onec.router, prefix="/api/onec", tags=["onec"])
+app.include_router(onec.router, prefix="/api/onec")
 app.include_router(web.router, tags=["web"])
 
 
