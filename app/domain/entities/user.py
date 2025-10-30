@@ -22,6 +22,7 @@ class User(BaseModel):
     department: str
     otdel: str
     appointment: str
+    mobile_phone: Optional[str] = None
     work_phone: Optional[str] = None
     current_location_id: str
     boss_id: Optional[str] = None

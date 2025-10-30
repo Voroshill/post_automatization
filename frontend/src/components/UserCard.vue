@@ -24,8 +24,9 @@
           </div>
           <div class="info-item">
             <span class="info-label">Мобильный номер:</span>
-            <span class="info-value">{{ user.work_phone || 'Не указан' }}</span>
+            <span class="info-value">{{ user.mobile_phone || 'Не указан' }}</span>
           </div>
+          
           <div class="info-item">
             <span class="info-label">O-ID:</span>
             <span class="info-value">{{ user.o_id || 'Не указан' }}</span>
