@@ -75,7 +75,6 @@ async def create_user_manually(
         user_dict["unique_id"] = user_dict.pop("unique", user_dict.get("unique_id"))
         user_dict["department"] = user_dict.pop("Department", user_dict.get("department"))
         user_dict["otdel"] = user_dict.pop("Otdel", user_dict.get("otdel"))
-        user_dict["mobile_phone"] = user_dict.pop("MobilePhone", user_dict.get("mobile_phone"))
         user_dict["work_phone"] = user_dict.pop("WorkPhone", user_dict.get("work_phone"))
         user_dict["birth_date"] = user_dict.pop("BirthDate", user_dict.get("birth_date"))
         user_dict["upload_date"] = user_dict.pop("UploadDate", user_dict.get("upload_date"))

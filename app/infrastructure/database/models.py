@@ -18,7 +18,6 @@ class UserModel(Base):
     department = Column(String, nullable=False)
     otdel = Column(String, nullable=False)
     appointment = Column(String, nullable=False)
-    mobile_phone = Column(String, nullable=True)
     work_phone = Column(String, nullable=True)
     current_location_id = Column(String, nullable=False)
     boss_id = Column(String, nullable=True)

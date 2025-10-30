@@ -62,7 +62,7 @@ class ExportService:
             headers = [
                 'ID', 'Уникальный ID', 'Фамилия', 'Имя', 'Отчество', 'Компания',
                 'Подразделение', 'Отдел', 'Должность', 'Руководитель ID',
-                'Локация ID', 'Мобильный телефон', 'Рабочий телефон',
+                'Локация ID', 'Рабочий телефон',
                 'Дата рождения', 'Инженер', 'Дата загрузки', 'Статус'
             ]
             for col, header in enumerate(headers):
@@ -81,12 +81,11 @@ class ExportService:
                     worksheet.write(row, 8, user.appointment or '', cell_format)
                     worksheet.write(row, 9, user.boss_id or '', cell_format)
                     worksheet.write(row, 10, user.current_location_id or '', cell_format)
-                    worksheet.write(row, 11, user.mobile_phone or '', cell_format)
-                    worksheet.write(row, 12, user.work_phone or '', cell_format)
-                    worksheet.write(row, 13, str(user.birth_date) if user.birth_date else '', cell_format)
-                    worksheet.write(row, 14, 'Да' if user.is_engineer else 'Нет', cell_format)
-                    worksheet.write(row, 15, str(user.upload_date) if user.upload_date else '', cell_format)
-                    worksheet.write(row, 16, user.status.value, status_format)
+                    worksheet.write(row, 11, user.work_phone or '', cell_format)
+                    worksheet.write(row, 12, str(user.birth_date) if user.birth_date else '', cell_format)
+                    worksheet.write(row, 13, 'Да' if user.is_engineer else 'Нет', cell_format)
+                    worksheet.write(row, 14, str(user.upload_date) if user.upload_date else '', cell_format)
+                    worksheet.write(row, 15, user.status.value, status_format)
                     
                 except Exception as e:
                     export_logger.error(f"Ошибка записи пользователя {user.id}: {e}")
@@ -99,11 +98,11 @@ class ExportService:
             worksheet.set_column(6, 7, 20)  # Подразделение, Отдел
             worksheet.set_column(8, 8, 25)  # Должность
             worksheet.set_column(9, 10, 12) # ID руководителя и локации
-            worksheet.set_column(11, 12, 15) # Телефоны
-            worksheet.set_column(13, 13, 12) # Дата рождения
-            worksheet.set_column(14, 14, 10) # Инженер
-            worksheet.set_column(15, 15, 15) # Дата загрузки
-            worksheet.set_column(16, 16, 12) # Статус
+            worksheet.set_column(11, 11, 15) # Телефон
+            worksheet.set_column(12, 12, 12) # Дата рождения
+            worksheet.set_column(13, 13, 10) # Инженер
+            worksheet.set_column(14, 14, 15) # Дата загрузки
+            worksheet.set_column(15, 15, 12) # Статус
             
             stats_worksheet = workbook.add_worksheet('Статистика')
             

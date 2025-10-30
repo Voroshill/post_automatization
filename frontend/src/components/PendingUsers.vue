@@ -884,7 +884,6 @@ export default {
           Department: document.getElementById('Department').value,
           Otdel: document.getElementById('Otdel').value,
           appointment: document.getElementById('appointment').value,
-          MobilePhone: document.getElementById('MobilePhone').value,
           WorkPhone: document.getElementById('WorkPhone').value,
           current_location_id: document.getElementById('current_location_id').value,
           boss_id: document.getElementById('boss_id').value,

@@ -38,7 +38,6 @@ class UserCreateRequest(BaseModel):
     Department: str
     Otdel: str
     appointment: str
-    MobilePhone: Optional[str] = None
     WorkPhone: Optional[str] = None
     current_location_id: str
     boss_id: Optional[str] = None
@@ -61,7 +60,6 @@ class UserResponse(BaseModel):
     department: str
     otdel: str
     appointment: str
-    mobile_phone: Optional[str] = None
     work_phone: Optional[str] = None
     current_location_id: str
     boss_id: Optional[str] = None
