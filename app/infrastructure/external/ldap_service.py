@@ -690,17 +690,25 @@ class LDAPService:
             
             conn = await self._get_connection()
             
-            search_filter = f"(pager={unique_id})"
+            search_base = 'DC=central,DC=st-ing,DC=com'
+            search_filter = f"(&(" + "objectClass=user)(objectCategory=person)" + f"(pager={unique_id}))"
+            ldap_logger.info(f"LDAP поиск пользователя: base={search_base}, filter={search_filter}")
             conn.search(
-                'DC=central,DC=st-ing,DC=com',
+                search_base,
                 search_filter,
-                attributes=['sAMAccountName', 'memberOf', 'distinguishedName']
+                search_scope=SUBTREE,
+                attributes=['cn', 'sAMAccountName', 'memberOf', 'distinguishedName', 'objectClass', 'userPrincipalName', 'pager']
             )
+            ldap_logger.info(f"Найдено записей: {len(conn.entries)}")
             
             if not conn.entries:
                 return {"success": False, "stderr": f"Пользователь с pager {unique_id} не найден"}
             
             user = conn.entries[0]
+            try:
+                ldap_logger.info(f"Краткие атрибуты: cn={getattr(getattr(user,'cn',None),'value',None)}, sAMAccountName={getattr(getattr(user,'sAMAccountName',None),'value',None)}, UPN={getattr(getattr(user,'userPrincipalName',None),'value',None)}, pager={getattr(getattr(user,'pager',None),'value',None)}")
+            except Exception:
+                pass
             sam_account_name = user.sAMAccountName.value
             # Определяем DN пользователя надёжно (каскад из нескольких источников)
             current_dn = getattr(user, 'entry_dn', None)
@@ -996,9 +1004,11 @@ class LDAPService:
                     pass
             if not current_dn and sam_account_name:
                 try:
+                    ldap_logger.info(f"Фоллбэк-поиск DN по sAMAccountName={sam_account_name}")
                     conn.search(
-                        'DC=central,DC=st-ing,DC=com',
-                        f'(sAMAccountName={sam_account_name})',
+                        search_base,
+                        f'(&(objectClass=user)(objectCategory=person)(sAMAccountName={sam_account_name}))',
+                        search_scope=SUBTREE,
                         attributes=['distinguishedName']
                     )
                     if conn.entries:
@@ -1007,6 +1017,19 @@ class LDAPService:
                     ldap_logger.warning(f"Фоллбэк-поиск DN по sAMAccountName завершился ошибкой: {e}")
             if current_dn:
                 ldap_logger.info(f"Текущий DN пользователя: {current_dn}")
+            else:
+                # Доп. диагностика: альтернативные фильтры
+                alt_filters = [
+                    f'(pager={unique_id})',
+                    f'(&(objectClass=user)(pager={unique_id}))',
+                    f'(&(objectCategory=person)(pager={unique_id}))'
+                ]
+                for af in alt_filters:
+                    try:
+                        conn.search(search_base, af, search_scope=SUBTREE, attributes=['distinguishedName'])
+                        ldap_logger.info(f"Пробный поиск {af} → найдено: {len(conn.entries)}")
+                    except Exception as e:
+                        ldap_logger.warning(f"Ошибка пробного поиска {af}: {e}")
 
             # Удаляем из групп только при известном DN
             if current_dn and hasattr(user, 'memberOf') and user.memberOf:
@@ -1016,7 +1039,7 @@ class LDAPService:
                             current_dn,
                             group_dn
                         )
-                        ldap_logger.info(f"Удален из группы: {group_dn}")
+                        ldap_logger.info(f"Удален из группы: {group_dn}; result={conn.result}")
                     except Exception as e:
                         ldap_logger.warning(f"Ошибка удаления из группы {group_dn}: {e}")
             
@@ -1058,7 +1081,7 @@ class LDAPService:
                 if conn.result.get('result') == 0:
                     current_dn = f"{rdn},{target_ou}"
                     moved_ok = True
-                    ldap_logger.info(f"Перемещен в OU: {target_ou}")
+                    ldap_logger.info(f"Перемещен в OU: {target_ou}; result={conn.result}")
                 else:
                     ldap_logger.warning(f"Не удалось переместить объект: {conn.result}")
             except Exception as e:
