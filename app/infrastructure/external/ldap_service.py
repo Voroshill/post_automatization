@@ -932,7 +932,9 @@ class LDAPService:
         """Полная блокировка пользователя"""
         try:
             ldap_logger.info(f"Полная блокировка пользователя через LDAP: {unique_id}")
-            
+            # Инициализация DN заранее, чтобы избежать UnboundLocalError
+            current_dn: Optional[str] = None
+
             conn = await self._get_connection()
             
             search_filter = f"(pager={unique_id})"
