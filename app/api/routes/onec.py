@@ -26,6 +26,7 @@ class OneCUserData(BaseModel):
     Otdel: str
     appointment: str
     WorkPhone: str = None
+    MobilePhone: str = None
     current_location_id: str
     boss_id: str = None
     BirthDate: str = None
