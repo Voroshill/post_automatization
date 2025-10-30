@@ -702,7 +702,17 @@ class LDAPService:
             
             user = conn.entries[0]
             sam_account_name = user.sAMAccountName.value
-            current_dn = user.entry_dn
+            # Безопасно определяем текущий DN
+            current_dn = None
+            try:
+                current_dn = user.entry_dn
+            except Exception:
+                pass
+            if not current_dn:
+                try:
+                    current_dn = user.distinguishedName.value
+                except Exception:
+                    current_dn = None
             
             if hasattr(user, 'memberOf') and user.memberOf:
                 for group_dn in user.memberOf.values:
@@ -952,44 +962,61 @@ class LDAPService:
                     except Exception as e:
                         ldap_logger.warning(f"Ошибка удаления из группы {group_dn}: {e}")
             
-            # Отключаем учетную запись по текущему DN (идемпотентно)
+            if not current_dn:
+                error_msg = "Не удалось определить DN пользователя для блокировки"
+                ldap_logger.error(error_msg)
+                return {"success": False, "stderr": error_msg}
+
+            disabled_ok = False
+            moved_ok = False
+
+            # Отключаем учетную запись по текущему DN (идемпотентно) и фиксируем pager
             try:
-                conn.modify(
-                    current_dn,
-                    {'userAccountControl': [(MODIFY_REPLACE, ['2'])]}  # ACCOUNTDISABLE
-                )
+                # ACCOUNTDISABLE
+                conn.modify(current_dn, {'userAccountControl': [(MODIFY_REPLACE, ['2'])]})
                 if conn.result['result'] == 0:
                     ldap_logger.info("Учетная запись отключена (ACCOUNTDISABLE)")
+                    disabled_ok = True
                 else:
                     ldap_logger.warning(f"Не удалось отключить учетную запись: {conn.result}")
             except Exception as e:
                 ldap_logger.warning(f"Ошибка отключения учетной записи: {e}")
 
+            # Перезаписываем pager на актуальный unique_id (как в PowerShell)
+            try:
+                conn.modify(current_dn, {'pager': [(MODIFY_REPLACE, [unique_id]) ]})
+                if conn.result['result'] == 0:
+                    ldap_logger.info("Атрибут pager синхронизирован с unique_id")
+                else:
+                    ldap_logger.warning(f"Не удалось обновить pager: {conn.result}")
+            except Exception as e:
+                ldap_logger.warning(f"Ошибка обновления pager: {e}")
+
             # Перемещаем в OU "Уволенные сотрудники" с сохранением RDN
             target_ou = "OU=Уволенные сотрудники,DC=central,DC=st-ing,DC=com"
             try:
                 rdn = current_dn.split(",", 1)[0]  # например, CN=ФИО
-                conn.modify_dn(
-                    current_dn,
-                    rdn,
-                    new_superior=target_ou
-                )
+                conn.modify_dn(current_dn, rdn, new_superior=target_ou)
                 if conn.result['result'] == 0:
                     current_dn = f"{rdn},{target_ou}"
+                    moved_ok = True
                     ldap_logger.info(f"Перемещен в OU: {target_ou}")
                 else:
                     ldap_logger.warning(f"Не удалось переместить объект: {conn.result}")
             except Exception as e:
                 ldap_logger.warning(f"Ошибка перемещения в OU: {e}")
             
-            # Финальная проверка
-            if conn.result['result'] == 0:
-                ldap_logger.info(f"Пользователь {sam_account_name} полностью заблокирован через LDAP")
-                return {"success": True, "stdout": f"User {sam_account_name} completely blocked"}
-            else:
-                error_msg = f"Ошибка полной блокировки: {conn.result}"
-                ldap_logger.error(error_msg)
-                return {"success": False, "stderr": error_msg}
+            # Финальная проверка: считаем успехом, если хотя бы disable прошел; предпочтительно и move
+            if disabled_ok and moved_ok:
+                ldap_logger.info(f"Пользователь {sam_account_name} полностью заблокирован и перемещен")
+                return {"success": True, "stdout": f"User {sam_account_name} completely blocked and moved"}
+            if disabled_ok and not moved_ok:
+                warn_msg = "Учетная запись отключена, но перемещение не выполнено"
+                ldap_logger.warning(warn_msg)
+                return {"success": True, "stdout": warn_msg}
+            error_msg = "Ни один из ключевых шагов блокировки не выполнен"
+            ldap_logger.error(error_msg)
+            return {"success": False, "stderr": error_msg}
                 
         except Exception as e:
             ldap_logger.error(f"Исключение при полной блокировке через LDAP: {e}")
