@@ -113,7 +113,7 @@ class SQLAlchemyUserRepository(UserRepository):
                     (UserModel.secondname.ilike(search_term)) |
                     (UserModel.thirdname.ilike(search_term)) |
                     (UserModel.unique_id.ilike(search_term)) |
-                    (UserModel.mobile_phone.ilike(search_term))
+                    
                 )
             total_count = count_query.count()
 
@@ -125,7 +125,7 @@ class SQLAlchemyUserRepository(UserRepository):
                     (UserModel.secondname.ilike(search_term)) |
                     (UserModel.thirdname.ilike(search_term)) |
                     (UserModel.unique_id.ilike(search_term)) |
-                    (UserModel.mobile_phone.ilike(search_term))
+                    
                 )
             if cursor:
                 cursor_id = self._decode_cursor(cursor)
@@ -189,7 +189,7 @@ class SQLAlchemyUserRepository(UserRepository):
                 (UserModel.secondname.ilike(search_term)) |
                 (UserModel.thirdname.ilike(search_term)) |
                 (UserModel.unique_id.ilike(search_term)) |
-                (UserModel.mobile_phone.ilike(search_term))
+                
             ).all()
             users = [User.model_validate(model) for model in user_models]
             db_logger.info(f"Найдено {len(users)} пользователей")
@@ -211,7 +211,7 @@ class SQLAlchemyUserRepository(UserRepository):
                     (UserModel.secondname.ilike(search_term)) |
                     (UserModel.thirdname.ilike(search_term)) |
                     (UserModel.unique_id.ilike(search_term)) |
-                    (UserModel.mobile_phone.ilike(search_term))
+                    
                 )
             total_count = count_query.count()
 
@@ -223,7 +223,7 @@ class SQLAlchemyUserRepository(UserRepository):
                     (UserModel.secondname.ilike(search_term)) |
                     (UserModel.thirdname.ilike(search_term)) |
                     (UserModel.unique_id.ilike(search_term)) |
-                    (UserModel.mobile_phone.ilike(search_term))
+                    
                 )
 
             if cursor:
@@ -264,7 +264,7 @@ class SQLAlchemyUserRepository(UserRepository):
                 (UserModel.secondname.ilike(f"%{query}%")) |
                 (UserModel.thirdname.ilike(f"%{query}%")) |
                 (UserModel.unique_id.ilike(f"%{query}%")) |
-                (UserModel.mobile_phone.ilike(f"%{query}%"))
+                
             )
             if status:
                 count_query = count_query.filter(UserModel.status == status)
@@ -276,7 +276,7 @@ class SQLAlchemyUserRepository(UserRepository):
                 (UserModel.secondname.ilike(search_term)) |
                 (UserModel.thirdname.ilike(search_term)) |
                 (UserModel.unique_id.ilike(search_term)) |
-                (UserModel.mobile_phone.ilike(search_term))
+                
             )
             if status:
                 db_query = db_query.filter(UserModel.status == status)
@@ -323,7 +323,7 @@ class SQLAlchemyUserRepository(UserRepository):
                     (UserModel.secondname.ilike(search_term)) |
                     (UserModel.thirdname.ilike(search_term)) |
                     (UserModel.unique_id.ilike(search_term)) |
-                    (UserModel.mobile_phone.ilike(search_term))
+                    
                 )
             total_count = count_query.count()
             
@@ -337,7 +337,7 @@ class SQLAlchemyUserRepository(UserRepository):
                     (UserModel.secondname.ilike(search_term)) |
                     (UserModel.thirdname.ilike(search_term)) |
                     (UserModel.unique_id.ilike(search_term)) |
-                    (UserModel.mobile_phone.ilike(search_term))
+                    
                 )
             if cursor:
                 cursor_id = self._decode_cursor(cursor)

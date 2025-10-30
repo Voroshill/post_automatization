@@ -42,7 +42,6 @@ def user_to_response(user) -> UserResponse:
         department=user.department,
         otdel=user.otdel,
         appointment=user.appointment,
-        mobile_phone=user.mobile_phone,
         work_phone=user.work_phone,
         current_location_id=user.current_location_id,
         boss_id=user.boss_id,

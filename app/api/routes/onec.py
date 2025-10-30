@@ -76,7 +76,6 @@ async def receive_user_data(
                 "department": user_data.Department,
                 "otdel": user_data.Otdel,
                 "appointment": user_data.appointment,
-                "mobile_phone": user_data.MobilePhone,
                 "work_phone": user_data.WorkPhone,
                 "current_location_id": user_data.current_location_id,
                 "boss_id": user_data.boss_id,

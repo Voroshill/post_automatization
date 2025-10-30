@@ -129,7 +129,7 @@ export default {
       Department: '',
       Otdel: '',
       appointment: '',
-      MobilePhone: '',
+      
       WorkPhone: '',
       current_location_id: '',
       boss_id: '',
@@ -234,7 +234,7 @@ export default {
     const viewUserDetails = (userId) => {
       const user = users.value.find(u => u.id === userId)
       if (user) {
-        showAlert(`Пользователь ${user.secondname} ${user.firstname} успешно создан!\n\n📧 Email: ${user.secondname.toLowerCase()}.${user.firstname.toLowerCase()}@st-ing.com\n🏢 Компания: ${user.company}\n📱 Телефон: ${user.mobile_phone || 'Не указан'}`, 'success')
+        showAlert(`Пользователь ${user.secondname} ${user.firstname} успешно создан!\n\n📧 Email: ${user.secondname.toLowerCase()}.${user.firstname.toLowerCase()}@st-ing.com\n🏢 Компания: ${user.company}\n☎️ Рабочий телефон: ${user.work_phone || 'Не указан'}`, 'success')
       }
     }
 
@@ -351,12 +351,6 @@ export default {
       }
       
       // Валидация телефонов
-      if (formData.MobilePhone && formData.MobilePhone.trim()) {
-        const phoneRegex = /^[\+]?[0-9\s\-\(\)]{10,15}$/
-        if (!phoneRegex.test(formData.MobilePhone.trim())) {
-          errors.push('Некорректный формат мобильного телефона')
-        }
-      }
       if (formData.WorkPhone && formData.WorkPhone.trim()) {
         const phoneRegex = /^[\+]?[0-9\s\-\(\)]{10,15}$/
         if (!phoneRegex.test(formData.WorkPhone.trim())) {
@@ -430,7 +424,7 @@ export default {
         Otdel: document.getElementById('Otdel')?.value || '',
         appointment: document.getElementById('appointment')?.value || '',
         current_location_id: document.getElementById('current_location_id')?.value || '',
-        MobilePhone: document.getElementById('MobilePhone')?.value || '',
+        
         WorkPhone: document.getElementById('WorkPhone')?.value || '',
         BirthDate: document.getElementById('BirthDate')?.value || ''
       }
@@ -740,11 +734,7 @@ export default {
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Должность *</label>
                     <input type="text" id="appointment" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;" required>
                   </div>
-                  <div>
-                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Мобильный телефон</label>
-                    <input type="tel" id="MobilePhone" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;">
-                    <small style="color: #6c757d; font-size: 0.875rem;">Формат: +7 (999) 123-45-67 или 8 999 123 45 67</small>
-                  </div>
+                  
                   <div>
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Рабочий телефон</label>
                     <input type="tel" id="WorkPhone" style="width: 100%; padding: 0.75rem; border: 2px solid #e9ecef; border-radius: 8px;">
@@ -812,7 +802,7 @@ export default {
         loadLocations()
         const fields = [
           'unique', 'firstname', 'secondname', 'company', 'Department', 'Otdel', 'appointment',
-          'current_location_id', 'MobilePhone', 'WorkPhone', 'BirthDate'
+          'current_location_id', 'WorkPhone', 'BirthDate'
         ]
         
         fields.forEach(fieldId => {
