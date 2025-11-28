@@ -13,17 +13,26 @@ services:
       - app_data:/app/data
       - ./scripts:/app/scripts
       - ./logs:/app/logs
+      - ./.env:/app/.env
     restart: unless-stopped
     # user: "1000:1000"  # Закомментировано для избежания проблем с правами
     ports:
-      - "8000:8000"
+      - "0.0.0.0:8000:8000"
+    networks:
+      - app-network
 
   frontend:
     build: ./frontend
     container_name: user-management-frontend
     ports:
-      - "8080:80"
+      - "0.0.0.0:8080:80"
     restart: unless-stopped
+    networks:
+      - app-network
 
 volumes:
   app_data:
+
+networks:
+  app-network:
+    driver: bridge
