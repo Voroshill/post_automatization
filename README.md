@@ -112,7 +112,7 @@ ONEC_ALLOWED_ORIGINS=172.17.177.47:3048,localhost:3048
 ## 🔌 API Endpoints
 
 ### Основные
-- `POST /api/oneC/receive` - Прием данных из 1С
+- `POST /api/onec/oneC/receive` - Прием данных из 1С
 - `GET /api/users/pending` - Пользователи на одобрении
 - `PUT /api/users/{id}/approve` - Одобрение пользователя
 
@@ -127,7 +127,7 @@ ONEC_ALLOWED_ORIGINS=172.17.177.47:3048,localhost:3048
 
 ### 1. Интеграция с 1С
 ```json
-POST /api/oneC/receive
+POST /api/onec/oneC/receive
 {
   "unique": "#00584",
   "firstname": "Иван",

@@ -5,9 +5,10 @@
 Система получает данные о пользователях от 1C через REST API. Поддерживаются как одиночные пользователи, так и пакетная обработка.
 
 ### 🌐 Endpoints
-- **Один пользователь**: `POST /api/onec/users`
-- **Пакет пользователей**: `POST /api/onec/users/batch`
-- **Статус интеграции**: `GET /api/onec/status`
+- **Один пользователь или пакет**: `POST /api/onec/oneC/receive`
+- **Статус интеграции**: `GET /api/onec/oneC/status`
+
+**Примечание:** Endpoint `/receive` автоматически определяет тип данных - один объект или массив объектов.
 
 ---
 
@@ -47,12 +48,14 @@
 
 ## 📝 Примеры запросов
 
-### **1. Один пользователь**
+### **1. Один пользователь или пакет пользователей**
 
 ```http
-POST /api/onec/users
+POST /api/onec/oneC/receive
 Content-Type: application/json
 ```
+
+**Примечание:** Endpoint принимает как один объект пользователя, так и массив пользователей. Система автоматически определяет тип данных.
 
 ```json
 {
@@ -90,10 +93,7 @@ Content-Type: application/json
 
 ### **2. Пакет пользователей**
 
-```http
-POST /api/onec/users/batch
-Content-Type: application/json
-```
+**Используется тот же endpoint `/api/onec/oneC/receive`, но с массивом объектов в теле запроса:**
 
 ```json
 [
@@ -292,7 +292,7 @@ Content-Type: application/json
 
 ```bash
 # Тест одного пользователя
-curl -X POST "http://localhost/api/onec/users" \
+curl -X POST "http://localhost/api/onec/oneC/receive" \
   -H "Content-Type: application/json" \
   -d '{
     "unique": "#TEST001",
@@ -307,7 +307,7 @@ curl -X POST "http://localhost/api/onec/users" \
   }'
 
 # Тест пакета пользователей
-curl -X POST "http://localhost/api/onec/users/batch" \
+curl -X POST "http://localhost/api/onec/oneC/receive" \
   -H "Content-Type: application/json" \
   -d '[
     {
@@ -324,7 +324,7 @@ curl -X POST "http://localhost/api/onec/users/batch" \
   ]'
 
 # Проверка статуса
-curl -X GET "http://localhost/api/onec/status"
+curl -X GET "http://localhost/api/onec/oneC/status"
 ```
 
 ### **Python примеры**
@@ -348,7 +348,7 @@ user_data = {
 
 # Отправка одного пользователя
 response = requests.post(
-    "http://localhost/api/onec/users",
+    "http://localhost/api/onec/oneC/receive",
     json=user_data,
     headers={"Content-Type": "application/json"}
 )
@@ -357,7 +357,7 @@ print(response.json())
 # Отправка пакета пользователей
 users_batch = [user_data, user_data2]
 response = requests.post(
-    "http://localhost/api/onec/users/batch",
+    "http://localhost/api/onec/oneC/receive",
     json=users_batch,
     headers={"Content-Type": "application/json"}
 )
@@ -370,7 +370,7 @@ print(response.json())
 
 ### **Статус интеграции**
 ```http
-GET /api/onec/status
+GET /api/onec/oneC/status
 ```
 
 **Ответ:**
@@ -378,7 +378,7 @@ GET /api/onec/status
 {
   "success": true,
   "status": "active",
-  "endpoint": "/api/onec/receive",
+  "endpoint": "/api/onec/oneC/receive",
   "allowed_origins": ["http://localhost:8080", "http://your-1c-server.com"],
   "message": "1C интеграция работает"
 }
@@ -399,19 +399,19 @@ GET /api/onec/status
 ONEC_ALLOWED_ORIGINS=http://localhost:8080,http://your-1c-server.com
 
 # Endpoint для получения данных
-ONEC_ENDPOINT=/api/onec/receive
+ONEC_ENDPOINT=/api/oneC/receive
 ```
 
 ### **Проверка настроек**
 ```bash
 # Проверка CORS настроек
 curl -H "Origin: http://your-1c-server.com" \
-  -X GET "http://localhost/api/onec/status"
+  -X GET "http://localhost/api/onec/oneC/status"
 
 # Проверка доступности endpoint
-curl -X GET "http://localhost/api/onec/status"
+curl -X GET "http://localhost/api/onec/oneC/status"
 ```
 
 ---
 
-*Последнее обновление: Август 2025*
+*Последнее обновление: Январь 2025*

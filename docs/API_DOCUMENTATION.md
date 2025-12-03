@@ -22,7 +22,7 @@ https://user-management.yourdomain.com/api
 
 #### 1. Получение конфигурации аутентификации
 ```http
-GET /api/users/auth-config
+GET /api/users/auth/config
 ```
 
 **Ответ:**
@@ -31,6 +31,11 @@ GET /api/users/auth-config
   "auth_enabled": true,
   "login_url": "/api/users/auth/login"
 }
+```
+
+**Альтернативный endpoint (устаревший):**
+```http
+GET /api/users/auth-config
 ```
 
 #### 2. Вход в систему
@@ -167,7 +172,7 @@ Content-Type: application/json
 
 #### 10. Создание технического пользователя
 ```http
-POST /api/users/create-technical-user
+POST /api/users/admin/technical
 Content-Type: application/json
 ```
 
@@ -327,13 +332,15 @@ GET /api/users/export/xlsx?status={status}&search={search}
 
 ### 🔗 Интеграция с 1C
 
-#### 18. Получение пользователей от 1C (один пользователь)
+#### 18. Получение пользователей от 1C (один пользователь или пакет)
 ```http
-POST /api/onec/users
+POST /api/onec/oneC/receive
 Content-Type: application/json
 ```
 
-**Тело запроса:**
+**Примечание:** Endpoint принимает как один объект пользователя, так и массив пользователей. Система автоматически определяет тип данных.
+
+**Тело запроса (один пользователь):**
 ```json
 {
   "unique": "#00585",
@@ -359,13 +366,7 @@ Content-Type: application/json
 }
 ```
 
-#### 19. Получение пользователей от 1C (пакет)
-```http
-POST /api/onec/users/batch
-Content-Type: application/json
-```
-
-**Тело запроса:**
+**Тело запроса (пакет пользователей):**
 ```json
 [
   {
@@ -415,9 +416,9 @@ Content-Type: application/json
 ]
 ```
 
-#### 20. Статус интеграции с 1C
+#### 19. Статус интеграции с 1C
 ```http
-GET /api/onec/status
+GET /api/onec/oneC/status
 ```
 
 **Ответ:**
@@ -425,7 +426,7 @@ GET /api/onec/status
 {
   "success": true,
   "status": "active",
-  "endpoint": "/api/onec/receive",
+  "endpoint": "/api/oneC/receive",
   "allowed_origins": ["http://localhost:8080", "http://your-1c-server.com"],
   "message": "1C интеграция работает"
 }
@@ -680,7 +681,7 @@ curl -X POST "http://localhost/api/users/auth/login" \
 curl -X GET "http://localhost/api/users/pending?limit=10"
 
 # Создание технического пользователя
-curl -X POST "http://localhost/api/users/create-technical-user" \
+curl -X POST "http://localhost/api/users/admin/technical" \
   -H "Content-Type: application/json" \
   -d '{
     "firstname": "Тест",
@@ -697,5 +698,5 @@ curl -X POST "http://localhost/api/users/create-technical-user" \
 
 ---
 
-*Последнее обновление: Август 2025*
+*Последнее обновление: декабрь 2025*
 
