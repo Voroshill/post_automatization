@@ -36,6 +36,7 @@ class User(BaseModel):
     upload_date: datetime
     created_at: datetime = datetime.now()
     updated_at: datetime = datetime.now()
+    is_update: bool = False
 
     class Config:
         from_attributes = True

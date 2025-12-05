@@ -1444,3 +1444,93 @@ class LDAPService:
             })
 
         return results
+
+    async def update_user_in_ad(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Обновление пользователя в AD (как Set-ADUser в скриптах)"""
+        try:
+            ldap_logger.info(f"=== ОБНОВЛЕНИЕ ПОЛЬЗОВАТЕЛЯ В AD ===")
+            ldap_logger.info(f"ID пользователя: {user_data.get('unique_id', 'Unknown')}")
+            
+            conn = await self._get_connection()
+            
+            # Находим пользователя по unique_id (pager)
+            search_filter = f"(pager={user_data.get('unique_id', '')})"
+            conn.search('DC=central,DC=st-ing,DC=com', search_filter, attributes=['sAMAccountName', 'distinguishedName'])
+            
+            if not conn.entries:
+                error_msg = f"Пользователь с pager {user_data.get('unique_id')} не найден"
+                ldap_logger.error(f"❌ {error_msg}")
+                return {"success": False, "stderr": error_msg}
+            
+            user_dn = conn.entries[0].distinguishedName.value
+            sam_account_name = conn.entries[0].sAMAccountName.value
+            
+            ldap_logger.info(f"Найден пользователь: {sam_account_name} -> {user_dn}")
+            
+            # Обновляем атрибуты (как Set-ADUser в PS.ps1 строки 367-368)
+            changes = {}
+            
+            # pager
+            if user_data.get('unique_id'):
+                changes['pager'] = [(MODIFY_REPLACE, [str(user_data.get('unique_id', ''))])]
+            
+            # company
+            if user_data.get('company'):
+                changes['company'] = [(MODIFY_REPLACE, [str(user_data.get('company', ''))])]
+            
+            # department (используем otdel как department)
+            if user_data.get('department'):
+                changes['department'] = [(MODIFY_REPLACE, [str(user_data.get('department', ''))])]
+            
+            # title и description (appointment)
+            if user_data.get('appointment'):
+                changes['title'] = [(MODIFY_REPLACE, [str(user_data.get('appointment', ''))])]
+                changes['description'] = [(MODIFY_REPLACE, [str(user_data.get('appointment', ''))])]
+            
+            # streetAddress, physicalDeliveryOfficeName и city (current_location_id)
+            # В скриптах: $city = $physicalDeliveryOfficeName, и обновляется через -city и -Office
+            if user_data.get('current_location_id'):
+                changes['streetAddress'] = [(MODIFY_REPLACE, [str(user_data.get('current_location_id', ''))])]
+                changes['physicalDeliveryOfficeName'] = [(MODIFY_REPLACE, [str(user_data.get('current_location_id', ''))])]
+                changes['l'] = [(MODIFY_REPLACE, [str(user_data.get('current_location_id', ''))])]  # l = city в LDAP
+            
+            # telephoneNumber
+            if user_data.get('work_phone'):
+                changes['telephoneNumber'] = [(MODIFY_REPLACE, [str(user_data.get('work_phone', ''))])]
+            
+            # givenName и sn
+            if user_data.get('firstname'):
+                changes['givenName'] = [(MODIFY_REPLACE, [str(user_data.get('firstname', ''))])]
+            
+            if user_data.get('secondname'):
+                changes['sn'] = [(MODIFY_REPLACE, [str(user_data.get('secondname', ''))])]
+            
+            if not changes:
+                ldap_logger.warning("Нет атрибутов для обновления")
+                return {
+                    "success": True,
+                    "sam_account_name": sam_account_name,
+                    "stdout": f"No attributes to update for {sam_account_name}"
+                }
+            
+            ldap_logger.info(f"Обновление {len(changes)} атрибутов для пользователя {sam_account_name}")
+            for attr_name in changes.keys():
+                ldap_logger.info(f"  {attr_name}: {changes[attr_name][0][1][0]}")
+            
+            conn.modify(user_dn, changes)
+            
+            if conn.result['result'] == 0:
+                ldap_logger.info(f"✅ Пользователь {sam_account_name} успешно обновлен в AD")
+                return {
+                    "success": True,
+                    "sam_account_name": sam_account_name,
+                    "stdout": f"User {sam_account_name} updated successfully"
+                }
+            else:
+                error_msg = f"Ошибка обновления: {conn.result}"
+                ldap_logger.error(f"❌ {error_msg}")
+                return {"success": False, "stderr": error_msg}
+                
+        except Exception as e:
+            ldap_logger.error(f"❌ Исключение при обновлении пользователя в AD: {e}")
+            return {"success": False, "stderr": str(e)}

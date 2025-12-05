@@ -43,6 +43,7 @@
                       :processing="processing"
                       :action-result="actionResults[user.id] || null"
                       @approve="approveUser"
+                      @update="updateUser"
                       @reject="rejectUser"
                     />
                   </div>
@@ -311,6 +312,34 @@ export default {
       } catch (error) {
         console.error('Ошибка отклонения пользователя:', error)
         showAlert('Ошибка отклонения пользователя', 'danger')
+      } finally {
+        processing.value = false
+      }
+    }
+
+    const updateUser = async (userId) => {
+      processing.value = true
+      try {
+        console.log('Updating user:', userId)
+        const result = await userService.updateUser(userId)
+        
+        showAlert('Пользователь успешно обновлен!', 'success')
+        actionResults.value[userId] = 'Обновлен'
+        
+        // Удаляем пользователя из списка через 2 секунды
+        setTimeout(() => {
+          const userIndex = users.value.findIndex(user => user.id === userId)
+          if (userIndex !== -1) {
+            users.value.splice(userIndex, 1)
+          }
+          delete actionResults.value[userId]
+        }, 2000)
+      } catch (error) {
+        console.error('Ошибка обновления пользователя:', error)
+        showAlert('Ошибка обновления пользователя', 'danger')
+        // Откатываем статус при ошибке
+        updateUserStatus(userId, 'pending')
+        delete actionResults.value[userId]
       } finally {
         processing.value = false
       }
@@ -1101,6 +1130,7 @@ export default {
       loadMoreUsers,
       refreshUsers,
       approveUser,
+      updateUser,
       rejectUser,
       showCreateModal,
       hideCreateModal,

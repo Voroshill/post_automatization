@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, DateTime, Enum as SQLEnum, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from app.domain.entities.user import UserStatus
 
@@ -32,3 +32,4 @@ class UserModel(Base):
     upload_date = Column(DateTime, nullable=False)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    is_update = Column(Boolean, default=False, nullable=False)

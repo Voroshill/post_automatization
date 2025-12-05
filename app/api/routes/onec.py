@@ -11,6 +11,7 @@ from datetime import datetime
 from app.core.config.settings import settings
 from app.core.logging.logger import api_logger
 from pydantic import BaseModel
+import time
 
 router = APIRouter(prefix="/oneC", tags=["1C Integration"])
 
@@ -68,8 +69,12 @@ async def receive_user_data(
         
         def transform_1c_data(user_data):
             """Преобразует данные от 1C в формат нашей БД"""
+            # Проверяем что unique_id не пустой
+            if not user_data.unique or not str(user_data.unique).strip():
+                raise ValueError(f"Поле unique (табельный номер) обязательно и не может быть пустым")
+            
             return {
-                "unique_id": user_data.unique,
+                "unique_id": str(user_data.unique).strip(),
                 "firstname": user_data.firstname,
                 "secondname": user_data.secondname,
                 "thirdname": user_data.thirdname,
@@ -99,6 +104,16 @@ async def receive_user_data(
             
             for i, user_data in enumerate(data):
                 try:
+                    # Проверяем обязательные поля перед трансформацией
+                    if not user_data.unique or not str(user_data.unique).strip():
+                        failed_users.append({
+                            "unique_id": user_data.unique or "N/A",
+                            "error": "Табельный номер (unique) обязателен и не может быть пустым",
+                            "status": "failed"
+                        })
+                        api_logger.warning(f"Пользователь {i+1}/{len(data)} без табельного номера пропущен")
+                        continue
+                    
                     transformed_data = transform_1c_data(user_data)
                     user = await user_service.create_user(transformed_data)
                     created_users.append({
@@ -110,16 +125,92 @@ async def receive_user_data(
                     
                 except IntegrityError as e:
                     if "UNIQUE constraint failed: users.unique_id" in str(e):
-                        error_msg = f"Сотрудник с табельным номером {user_data.unique} уже существует в системе"
+                        # Ищем существующего пользователя
+                        existing_user = await repository.get_user_by_unique_id(user_data.unique)
+                        
+                        if existing_user:
+                            # Если пользователь еще не одобрен (PENDING), просто обновляем его данные
+                            if existing_user.status == UserStatus.PENDING and not existing_user.is_update:
+                                api_logger.info(f"Пользователь ID={existing_user.id} в статусе PENDING, обновляем данные напрямую")
+                                transformed_data = transform_1c_data(user_data)
+                                # Убираем поля которые не нужно обновлять
+                                transformed_data.pop("unique_id", None)  # Не меняем unique_id
+                                transformed_data.pop("status", None)  # Не меняем статус
+                                transformed_data.pop("is_update", None)  # Не меняем флаг
+                                
+                                updated_user = await repository.update_user_data(existing_user.id, transformed_data)
+                                
+                                created_users.append({
+                                    "unique_id": user_data.unique,
+                                    "user_id": updated_user.id,
+                                    "status": "updated"
+                                })
+                                api_logger.info(f"Пользователь {i+1}/{len(data)} обновлен: {user_data.unique}")
+                            else:
+                                # Пользователь одобрен (APPROVED) - создаем запись об обновлении для подтверждения
+                                # Проверяем, есть ли уже незавершенная запись об обновлении
+                                pending_update = await repository.get_pending_update_by_original_unique_id(user_data.unique)
+                                
+                                if pending_update:
+                                    # Обновляем существующую запись об обновлении новыми данными
+                                    api_logger.info(f"Найдена существующая запись об обновлении ID={pending_update.id}, обновляем данными")
+                                    transformed_data = transform_1c_data(user_data)
+                                    # Убираем поля которые не нужно обновлять
+                                    transformed_data.pop("unique_id", None)  # Не меняем временный unique_id
+                                    transformed_data.pop("is_update", None)  # Не меняем флаг
+                                    transformed_data.pop("status", None)  # Не меняем статус
+                                    
+                                    updated_user = await repository.update_user_data(pending_update.id, transformed_data)
+                                    
+                                    created_users.append({
+                                        "unique_id": user_data.unique,
+                                        "user_id": updated_user.id,
+                                        "status": "update_updated"
+                                    })
+                                    api_logger.info(f"Запись об обновлении ID={pending_update.id} обновлена для пользователя {i+1}/{len(data)}")
+                                else:
+                                    # Создаем новую запись со статусом PENDING и пометкой об обновлении
+                                    transformed_data = transform_1c_data(user_data)
+                                    transformed_data["is_update"] = True
+                                    transformed_data["status"] = UserStatus.PENDING
+                                    
+                                    # Используем временный unique_id с суффиксом для обхода UNIQUE constraint
+                                    original_unique = transformed_data["unique_id"]
+                                    temp_unique = f"{original_unique}_update_{int(time.time())}"
+                                    transformed_data["unique_id"] = temp_unique
+                                    
+                                    try:
+                                        new_user = await user_service.create_user(transformed_data)
+                                        
+                                        created_users.append({
+                                            "unique_id": original_unique,
+                                            "user_id": new_user.id,
+                                            "status": "update_pending"
+                                        })
+                                        api_logger.info(f"Пользователь {i+1}/{len(data)} создан как обновление: {original_unique}")
+                                    except Exception as create_error:
+                                        failed_users.append({
+                                            "unique_id": user_data.unique,
+                                            "error": f"Ошибка создания записи об обновлении: {str(create_error)}",
+                                            "status": "failed"
+                                        })
+                                        api_logger.error(f"Ошибка создания записи об обновлении для {user_data.unique}: {create_error}")
+                        else:
+                            error_msg = f"Сотрудник с табельным номером {user_data.unique} уже существует, но не найден в системе"
+                            failed_users.append({
+                                "unique_id": user_data.unique,
+                                "error": error_msg,
+                                "status": "failed"
+                            })
+                            api_logger.warning(f"Пользователь {i+1}/{len(data)} уже существует, но не найден: {user_data.unique}")
                     else:
                         error_msg = f"Ошибка данных для сотрудника {user_data.unique}: некорректная информация"
-                    
-                    failed_users.append({
-                        "unique_id": user_data.unique,
-                        "error": error_msg,
-                        "status": "failed"
-                    })
-                    api_logger.warning(f"Пользователь {i+1}/{len(data)} уже существует: {user_data.unique}")
+                        failed_users.append({
+                            "unique_id": user_data.unique,
+                            "error": error_msg,
+                            "status": "failed"
+                        })
+                        api_logger.warning(f"Ошибка данных для пользователя {i+1}/{len(data)}: {user_data.unique}")
                     
                 except Exception as e:
                     failed_users.append({
@@ -158,7 +249,90 @@ async def receive_user_data(
                 
             except IntegrityError as e:
                 if "UNIQUE constraint failed: users.unique_id" in str(e):
-                    error_msg = f"Сотрудник с табельным номером {data.unique} уже существует в системе"
+                    # Ищем существующего пользователя
+                    existing_user = await repository.get_user_by_unique_id(data.unique)
+                    
+                    if existing_user:
+                        # Если пользователь еще не одобрен (PENDING), просто обновляем его данные
+                        if existing_user.status == UserStatus.PENDING and not existing_user.is_update:
+                            api_logger.info(f"Пользователь ID={existing_user.id} в статусе PENDING, обновляем данные напрямую")
+                            transformed_data = transform_1c_data(data)
+                            # Убираем поля которые не нужно обновлять
+                            transformed_data.pop("unique_id", None)  # Не меняем unique_id
+                            transformed_data.pop("status", None)  # Не меняем статус
+                            transformed_data.pop("is_update", None)  # Не меняем флаг
+                            
+                            updated_user = await repository.update_user_data(existing_user.id, transformed_data)
+                            
+                            api_logger.info(f"Пользователь обновлен: {data.unique}")
+                            
+                            return {
+                                "success": True,
+                                "message": "Сотрудник успешно обновлен в системе",
+                                "user_id": updated_user.id,
+                                "updated": True,
+                                "unique_id": data.unique
+                            }
+                        else:
+                            # Пользователь одобрен (APPROVED) - создаем запись об обновлении для подтверждения
+                            # Проверяем, есть ли уже незавершенная запись об обновлении
+                            pending_update = await repository.get_pending_update_by_original_unique_id(data.unique)
+                            
+                            if pending_update:
+                                # Обновляем существующую запись об обновлении новыми данными
+                                api_logger.info(f"Найдена существующая запись об обновлении ID={pending_update.id}, обновляем данными")
+                                transformed_data = transform_1c_data(data)
+                                # Убираем поля которые не нужно обновлять
+                                transformed_data.pop("unique_id", None)  # Не меняем временный unique_id
+                                transformed_data.pop("is_update", None)  # Не меняем флаг
+                                transformed_data.pop("status", None)  # Не меняем статус
+                                
+                                updated_user = await repository.update_user_data(pending_update.id, transformed_data)
+                                
+                                api_logger.info(f"Запись об обновлении ID={pending_update.id} обновлена")
+                                
+                                return {
+                                    "success": True,
+                                    "message": "Существующая запись об обновлении обновлена новыми данными",
+                                    "user_id": updated_user.id,
+                                    "is_update": True,
+                                    "unique_id": data.unique
+                                }
+                            else:
+                                # Создаем новую запись со статусом PENDING и пометкой об обновлении
+                                transformed_data = transform_1c_data(data)
+                                transformed_data["is_update"] = True
+                                transformed_data["status"] = UserStatus.PENDING
+                                
+                                # Используем временный unique_id с суффиксом для обхода UNIQUE constraint
+                                original_unique = transformed_data["unique_id"]
+                                temp_unique = f"{original_unique}_update_{int(time.time())}"
+                                transformed_data["unique_id"] = temp_unique
+                                
+                                try:
+                                    new_user = await user_service.create_user(transformed_data)
+                                    
+                                    api_logger.info(f"Пользователь создан как обновление: {original_unique}")
+                                    
+                                    return {
+                                        "success": True,
+                                        "message": "Сотрудник добавлен в список ожидающих обновления",
+                                        "user_id": new_user.id,
+                                        "is_update": True,
+                                        "unique_id": original_unique
+                                    }
+                                except Exception as create_error:
+                                    api_logger.error(f"Ошибка создания записи об обновлении: {create_error}")
+                                    raise HTTPException(
+                                        status_code=400,
+                                        detail={
+                                            "success": False,
+                                            "error_type": "update_creation_error",
+                                            "message": f"Ошибка создания записи об обновлении: {str(create_error)}"
+                                        }
+                                    )
+                    else:
+                        error_msg = f"Сотрудник с табельным номером {data.unique} уже существует, но не найден в системе"
                 else:
                     error_msg = f"Ошибка данных: некорректная информация о сотруднике"
                 

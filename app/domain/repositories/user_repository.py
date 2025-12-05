@@ -58,3 +58,28 @@ class UserRepository(ABC):
     async def search_users(self, query: str) -> List[User]:
         """Поиск пользователей"""
         pass
+
+    @abstractmethod
+    async def get_user_by_unique_id(self, unique_id: str) -> Optional[User]:
+        """Получение пользователя по unique_id"""
+        pass
+
+    @abstractmethod
+    async def update_unique_id(self, user_id: int, unique_id: str) -> Optional[User]:
+        """Обновление unique_id (для временных записей)"""
+        pass
+
+    @abstractmethod
+    async def update_user_data(self, user_id: int, user_data: dict) -> Optional[User]:
+        """Обновление данных пользователя"""
+        pass
+
+    @abstractmethod
+    async def delete_user(self, user_id: int) -> bool:
+        """Удаление пользователя"""
+        pass
+
+    @abstractmethod
+    async def get_pending_update_by_original_unique_id(self, original_unique_id: str) -> Optional[User]:
+        """Поиск незавершенной записи об обновлении по оригинальному unique_id"""
+        pass

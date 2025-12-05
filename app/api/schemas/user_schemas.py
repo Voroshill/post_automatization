@@ -75,6 +75,7 @@ class UserResponse(BaseModel):
     upload_date: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    is_update: bool = False
 
     class Config:
         from_attributes = True

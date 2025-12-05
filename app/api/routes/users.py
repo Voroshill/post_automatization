@@ -32,9 +32,17 @@ def get_export_service() -> ExportService:
 
 def user_to_response(user) -> UserResponse:
     """Конвертирует User в UserResponse"""
+    import re
+    # Если это запись об обновлении, извлекаем оригинальный unique_id
+    unique_id = user.unique_id
+    if getattr(user, 'is_update', False) and user.unique_id:
+        match = re.match(r'^(.+?)_update_\d+$', user.unique_id)
+        if match:
+            unique_id = match.group(1)
+    
     return UserResponse(
         id=user.id,
-        unique_id=user.unique_id,
+        unique_id=unique_id,
         firstname=user.firstname,
         secondname=user.secondname,
         thirdname=user.thirdname,
@@ -55,7 +63,8 @@ def user_to_response(user) -> UserResponse:
         status=user.status,
         upload_date=user.upload_date or datetime.now(),
         created_at=user.created_at or datetime.now(),
-        updated_at=user.updated_at or datetime.now()
+        updated_at=user.updated_at or datetime.now(),
+        is_update=getattr(user, 'is_update', False)
     )
 
 
@@ -568,6 +577,49 @@ async def dismiss_user(
                 "error_type": "dismissal_error",
                 "message": "Ошибка увольнения сотрудника",
                 "details": "Не удалось уволить сотрудника. Попробуйте повторить операцию позже"
+            }
+        )
+
+
+@router.put("/{user_id}/update", response_model=UserResponse)
+async def update_user(
+    user_id: int,
+    user_service: UserService = Depends(get_user_service)
+):
+    """
+    Обновление существующего пользователя данными из записи об обновлении
+    """
+    try:
+        api_logger.info(f"Запрос обновления пользователя ID: {user_id}")
+        
+        updated_user = await user_service.update_existing_user(user_id)
+        
+        if not updated_user:
+            api_logger.warning(f"Пользователь с ID {user_id} не найден или не является записью об обновлении")
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "success": False,
+                    "error_type": "user_not_found",
+                    "message": "Запись об обновлении не найдена",
+                    "details": f"Запись с ID {user_id} не существует или не является записью об обновлении"
+                }
+            )
+        
+        api_logger.info(f"Пользователь {user_id} успешно обновлен")
+        return user_to_response(updated_user)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        api_logger.error(f"Ошибка обновления пользователя {user_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "success": False,
+                "error_type": "update_error",
+                "message": "Ошибка обновления сотрудника",
+                "details": f"Не удалось обновить сотрудника: {str(e)}"
             }
         )
 

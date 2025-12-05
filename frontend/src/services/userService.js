@@ -107,6 +107,17 @@ class UserService {
     }
   }
 
+  async updateUser(userId) {
+    try {
+      const result = await this.makeRequest(`${API_BASE_URL}/${userId}/update`, {
+        method: 'PUT'
+      })
+      return result
+    } catch (error) {
+      throw error
+    }
+  }
+
   async getUserStatus(userId) {
     try {
       const result = await this.makeRequest(`${API_BASE_URL}/${userId}/status`)

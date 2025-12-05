@@ -6,6 +6,7 @@ from app.domain.repositories.user_repository import UserRepository
 from app.domain.entities.user import User, UserStatus
 from app.infrastructure.database.models import UserModel
 from app.core.logging.logger import db_logger
+from datetime import datetime
 import base64
 
 class SQLAlchemyUserRepository(UserRepository):
@@ -356,4 +357,116 @@ class SQLAlchemyUserRepository(UserRepository):
             
         except Exception as e:
             db_logger.error(f"Ошибка получения всех пользователей: {e}")
+            raise
+
+    async def get_user_by_unique_id(self, unique_id: str) -> Optional[User]:
+        """Получение пользователя по unique_id"""
+        try:
+            db_logger.debug(f"Запрос пользователя по unique_id: {unique_id}")
+            user_model = self.db.query(UserModel).filter(UserModel.unique_id == unique_id).first()
+            
+            if user_model:
+                user = User.model_validate(user_model)
+                db_logger.debug(f"Пользователь найден: unique_id={unique_id}")
+                return user
+            else:
+                db_logger.warning(f"Пользователь не найден: unique_id={unique_id}")
+                return None
+                
+        except Exception as e:
+            db_logger.error(f"Ошибка получения пользователя по unique_id {unique_id}: {e}")
+            raise
+
+    async def get_pending_update_by_original_unique_id(self, original_unique_id: str) -> Optional[User]:
+        """Поиск незавершенной записи об обновлении по оригинальному unique_id"""
+        try:
+            db_logger.debug(f"Поиск записи об обновлении для unique_id: {original_unique_id}")
+            # Ищем записи с is_update=True, status=PENDING и unique_id начинающимся с original_unique_id_update_
+            pattern = f"{original_unique_id}_update_%"
+            user_model = self.db.query(UserModel).filter(
+                UserModel.is_update == True,
+                UserModel.status == UserStatus.PENDING,
+                UserModel.unique_id.like(pattern)
+            ).first()
+            
+            if user_model:
+                user = User.model_validate(user_model)
+                db_logger.debug(f"Найдена запись об обновлении: ID={user.id}, unique_id={user.unique_id}")
+                return user
+            else:
+                db_logger.debug(f"Запись об обновлении не найдена для unique_id: {original_unique_id}")
+                return None
+                
+        except Exception as e:
+            db_logger.error(f"Ошибка поиска записи об обновлении для unique_id {original_unique_id}: {e}")
+            raise
+
+    async def update_unique_id(self, user_id: int, unique_id: str) -> Optional[User]:
+        """Обновление unique_id (для временных записей)"""
+        try:
+            db_logger.info(f"Обновление unique_id пользователя: ID={user_id}, unique_id={unique_id}")
+            
+            user_model = self.db.query(UserModel).filter(UserModel.id == user_id).first()
+            if user_model:
+                user_model.unique_id = unique_id
+                self.db.commit()
+                self.db.refresh(user_model)
+                
+                user = User.model_validate(user_model)
+                db_logger.info(f"unique_id пользователя обновлен: ID={user_id}")
+                return user
+            else:
+                db_logger.warning(f"Пользователь не найден для обновления unique_id: ID={user_id}")
+                return None
+                
+        except Exception as e:
+            db_logger.error(f"Ошибка обновления unique_id пользователя {user_id}: {e}")
+            self.db.rollback()
+            raise
+
+    async def update_user_data(self, user_id: int, user_data: dict) -> Optional[User]:
+        """Обновление данных пользователя"""
+        try:
+            db_logger.info(f"Обновление данных пользователя: ID={user_id}")
+            
+            user_model = self.db.query(UserModel).filter(UserModel.id == user_id).first()
+            if user_model:
+                for key, value in user_data.items():
+                    if hasattr(user_model, key):
+                        setattr(user_model, key, value)
+                
+                user_model.updated_at = datetime.now()
+                self.db.commit()
+                self.db.refresh(user_model)
+                
+                user = User.model_validate(user_model)
+                db_logger.info(f"Данные пользователя обновлены: ID={user_id}")
+                return user
+            else:
+                db_logger.warning(f"Пользователь не найден для обновления данных: ID={user_id}")
+                return None
+                
+        except Exception as e:
+            db_logger.error(f"Ошибка обновления данных пользователя {user_id}: {e}")
+            self.db.rollback()
+            raise
+
+    async def delete_user(self, user_id: int) -> bool:
+        """Удаление пользователя"""
+        try:
+            db_logger.info(f"Удаление пользователя: ID={user_id}")
+            
+            user_model = self.db.query(UserModel).filter(UserModel.id == user_id).first()
+            if user_model:
+                self.db.delete(user_model)
+                self.db.commit()
+                db_logger.info(f"Пользователь удален: ID={user_id}")
+                return True
+            else:
+                db_logger.warning(f"Пользователь не найден для удаления: ID={user_id}")
+                return False
+                
+        except Exception as e:
+            db_logger.error(f"Ошибка удаления пользователя {user_id}: {e}")
+            self.db.rollback()
             raise

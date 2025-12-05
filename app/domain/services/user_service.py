@@ -367,3 +367,181 @@ class UserService:
         except Exception as e:
             app_logger.error(f"Ошибка обновления тестовых атрибутов в UserService: {e}")
             return {"success": False, "stderr": str(e)}
+
+    async def update_user_from_1c(self, unique_id: str, user_data: dict) -> Optional[User]:
+        """Автоматическое обновление пользователя из 1С (как в скриптах)"""
+        try:
+            app_logger.info(f"Автоматическое обновление пользователя из 1С: {unique_id}")
+            
+            # Получаем существующего пользователя
+            existing_user = await self.user_repository.get_user_by_unique_id(unique_id)
+            if not existing_user:
+                app_logger.warning(f"Пользователь с unique_id {unique_id} не найден")
+                return None
+            
+            app_logger.info(f"Обновление пользователя ID={existing_user.id} данными из 1С")
+            
+            # Обновляем данные в БД
+            update_data = {
+                "firstname": user_data.get("firstname"),
+                "secondname": user_data.get("secondname"),
+                "thirdname": user_data.get("thirdname"),
+                "company": user_data.get("company"),
+                "department": user_data.get("department"),
+                "otdel": user_data.get("otdel"),
+                "appointment": user_data.get("appointment"),
+                "work_phone": user_data.get("work_phone"),
+                "mobile_phone": user_data.get("mobile_phone"),
+                "current_location_id": user_data.get("current_location_id"),
+                "boss_id": user_data.get("boss_id"),
+                "is_engineer": user_data.get("is_engineer"),
+                "is_update": True,  # Пометка что это обновление из 1С
+            }
+            
+            # Если пользователь был APPROVED, меняем статус на PENDING чтобы админ увидел изменения
+            if existing_user.status == UserStatus.APPROVED:
+                update_data["status"] = UserStatus.PENDING
+                app_logger.info(f"Статус пользователя {existing_user.id} изменен на PENDING для просмотра изменений")
+            
+            await self.user_repository.update_user_data(existing_user.id, update_data)
+            app_logger.info(f"Данные пользователя {existing_user.id} обновлены в БД")
+            
+            # Обновляем в AD (как в скриптах - Set-ADUser)
+            ad_user_data = {
+                'unique_id': existing_user.unique_id,
+                'firstname': user_data.get("firstname"),
+                'secondname': user_data.get("secondname"),
+                'thirdname': user_data.get("thirdname"),
+                'company': user_data.get("company"),
+                'department': user_data.get("otdel"),  # department = otdel (как в скриптах)
+                'appointment': user_data.get("appointment"),
+                'work_phone': user_data.get("work_phone"),
+                'current_location_id': user_data.get("current_location_id"),
+                'boss_id': user_data.get("boss_id"),
+                'is_engineer': user_data.get("is_engineer"),
+            }
+            
+            # Обновляем атрибуты в AD
+            ad_result = await self.ldap_service.update_user_in_ad(ad_user_data)
+            
+            if not ad_result.get("success"):
+                app_logger.error(f"Ошибка обновления в AD: {ad_result.get('stderr')}")
+                # Не откатываем изменения в БД - они уже применены
+                return await self.user_repository.get_user_by_id(existing_user.id)
+            
+            sam_account_name = ad_result.get("sam_account_name")
+            app_logger.info(f"Пользователь {sam_account_name} обновлен в AD")
+            
+            # Обновляем группы (как в скриптах - Add-ADGroupMember)
+            await self.ldap_service._add_user_to_groups(sam_account_name, ad_user_data)
+            app_logger.info(f"Группы пользователя {sam_account_name} обновлены")
+            
+            # Обновляем менеджера если изменился
+            if user_data.get("boss_id"):
+                await self.ldap_service._assign_manager(sam_account_name, user_data.get("boss_id"))
+                app_logger.info(f"Менеджер для пользователя {sam_account_name} обновлен")
+            
+            app_logger.info(f"Пользователь {existing_user.id} успешно обновлен из 1С")
+            return await self.user_repository.get_user_by_id(existing_user.id)
+            
+        except Exception as e:
+            app_logger.error(f"Ошибка обновления пользователя {unique_id} из 1С: {e}")
+            raise
+
+    async def update_existing_user(self, update_user_id: int) -> Optional[User]:
+        """Обновление существующего пользователя (как в скриптах)"""
+        try:
+            app_logger.info(f"Обновление пользователя ID: {update_user_id}")
+            
+            # Получаем запись об обновлении
+            update_user = await self.user_repository.get_user_by_id(update_user_id)
+            if not update_user or not update_user.is_update:
+                app_logger.warning(f"Пользователь {update_user_id} не является записью об обновлении")
+                return None
+            
+            # Извлекаем оригинальный unique_id из временного (убираем суффикс _update_*)
+            # Формат: original_unique_update_timestamp
+            import re
+            match = re.match(r'^(.+?)_update_\d+$', update_user.unique_id)
+            if not match:
+                app_logger.error(f"Неверный формат unique_id записи об обновлении: {update_user.unique_id}")
+                return None
+            
+            original_unique_id = match.group(1)
+            app_logger.info(f"Извлечен оригинальный unique_id: {original_unique_id} из {update_user.unique_id}")
+            
+            # Получаем оригинального пользователя по извлеченному unique_id
+            original_user = await self.user_repository.get_user_by_unique_id(original_unique_id)
+            if not original_user:
+                app_logger.warning(f"Оригинальный пользователь с unique_id {original_unique_id} не найден")
+                return None
+            
+            app_logger.info(f"Обновление пользователя {original_user.id} данными из записи {update_user_id}")
+            
+            # Обновляем данные в БД
+            update_data = {
+                "firstname": update_user.firstname,
+                "secondname": update_user.secondname,
+                "thirdname": update_user.thirdname,
+                "company": update_user.company,
+                "department": update_user.department,
+                "otdel": update_user.otdel,
+                "appointment": update_user.appointment,
+                "work_phone": update_user.work_phone,
+                "mobile_phone": update_user.mobile_phone,
+                "current_location_id": update_user.current_location_id,
+                "boss_id": update_user.boss_id,
+                "is_engineer": update_user.is_engineer,
+            }
+            await self.user_repository.update_user_data(original_user.id, update_data)
+            app_logger.info(f"Данные пользователя {original_user.id} обновлены в БД")
+            
+            # Обновляем в AD (как в скриптах - Set-ADUser)
+            user_data = {
+                'unique_id': original_user.unique_id,
+                'firstname': update_user.firstname,
+                'secondname': update_user.secondname,
+                'thirdname': update_user.thirdname,
+                'company': update_user.company,
+                'department': update_user.otdel,  # department = otdel (как в скриптах)
+                'appointment': update_user.appointment,
+                'work_phone': update_user.work_phone,
+                'current_location_id': update_user.current_location_id,
+                'boss_id': update_user.boss_id,
+                'is_engineer': update_user.is_engineer,
+            }
+            
+            # Обновляем атрибуты в AD
+            ad_result = await self.ldap_service.update_user_in_ad(user_data)
+            
+            if not ad_result.get("success"):
+                app_logger.error(f"Ошибка обновления в AD: {ad_result.get('stderr')}")
+                # Откатываем изменения в БД? Или оставляем? Пока оставляем
+                return None
+            
+            sam_account_name = ad_result.get("sam_account_name")
+            app_logger.info(f"Пользователь {sam_account_name} обновлен в AD")
+            
+            # Обновляем группы (как в скриптах - Add-ADGroupMember)
+            await self.ldap_service._add_user_to_groups(sam_account_name, user_data)
+            app_logger.info(f"Группы пользователя {sam_account_name} обновлены")
+            
+            # Обновляем менеджера если изменился
+            if update_user.boss_id:
+                await self.ldap_service._assign_manager(sam_account_name, update_user.boss_id)
+                app_logger.info(f"Менеджер для пользователя {sam_account_name} обновлен")
+            
+            # Удаляем запись об обновлении
+            await self.user_repository.delete_user(update_user_id)
+            app_logger.info(f"Запись об обновлении {update_user_id} удалена")
+            
+            # Обновляем статус оригинального пользователя и сбрасываем флаг is_update
+            await self.user_repository.update_status(original_user.id, UserStatus.APPROVED)
+            await self.user_repository.update_user_data(original_user.id, {"is_update": False})
+            
+            app_logger.info(f"Пользователь {original_user.id} успешно обновлен")
+            return await self.user_repository.get_user_by_id(original_user.id)
+            
+        except Exception as e:
+            app_logger.error(f"Ошибка обновления пользователя {update_user_id}: {e}")
+            raise

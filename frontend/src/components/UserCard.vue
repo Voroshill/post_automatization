@@ -1,5 +1,10 @@
 <template>
-  <div class="user-card">
+  <div class="user-card" :class="{ 'is-update': user.is_update }">
+    <!-- Пометка об обновлении -->
+    <div v-if="user.is_update" class="update-badge">
+      🔄 Обновление существующего пользователя
+    </div>
+    
     <!-- Заголовок с ФИО -->
     <div class="user-header">
       <h5 class="user-fullname">
@@ -107,7 +112,7 @@
       </div>
       <div v-else>
         <button 
-          @click="$emit('approve', user.id)" 
+          @click="$emit(user.is_update ? 'update' : 'approve', user.id)" 
           class="btn action-btn"
           :class="getApproveButtonClass()"
           :disabled="processing || user.status === 'creating'"
@@ -188,6 +193,9 @@ export default {
       if (this.user.status === 'creating') {
         return 'СОЗДАНИЕ...'
       }
+      if (this.user.is_update) {
+        return 'ОБНОВИТЬ'
+      }
       return 'ДОБАВИТЬ'
     },
     getStatusClass(status) {
@@ -220,6 +228,21 @@ export default {
   padding: 8px;
   margin-bottom: 6px;
   border: 1px solid #e9ecef;
+}
+
+.user-card.is-update {
+  border-left: 4px solid #ffc107;
+}
+
+.update-badge {
+  background: #fff3cd;
+  color: #856404;
+  padding: 0.5rem;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-align: center;
 }
 
 .user-header {
