@@ -232,11 +232,11 @@ class LDAPService:
             
             ldap_logger.info(f"  Организационная единица: {ou}")
             
-            # Строим отображаемое имя без лишних пробелов
+            # Строим отображаемое имя в правильном порядке: Имя Отчество Фамилия (как в России)
             name_parts = [
                 (user_data.get('firstname', '') or '').strip(),
-                (user_data.get('secondname', '') or '').strip(),
-                (user_data.get('thirdname', '') or '').strip(),
+                (user_data.get('thirdname', '') or '').strip(),  # Отчество
+                (user_data.get('secondname', '') or '').strip(),  # Фамилия
             ]
             display_name = ' '.join([p for p in name_parts if p])
             
@@ -410,6 +410,7 @@ class LDAPService:
                 user_dn = exists_dn
 
                 # Обновляем атрибуты существующего пользователя (без изменения RDN/CN)
+                # Примечание: как в старых PowerShell скриптах, не перемещаем пользователя между OU при обновлении
                 ldap_logger.info(f"Обновление атрибутов существующего пользователя...")
 
                 # Подготавливаем атрибуты для обновления (исключаем неизменяемые атрибуты и CN как RDN)
