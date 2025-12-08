@@ -20,6 +20,12 @@ class LDAPService:
         self.server = Server(self.ad_server, get_info=ALL, connect_timeout=settings.ldap_timeout, use_ssl=False, port=389)
         self.connection = None
     
+    def _normalize_pager(self, pager: str) -> str:
+        """Убирает решетку из pager для работы с AD (как в скриптах)"""
+        if not pager:
+            return pager
+        return str(pager).lstrip('#').strip()
+    
     async def _get_connection(self) -> Connection:
         """Получение подключения к AD"""
         if not self.connection or not self.connection.bound:
@@ -335,7 +341,7 @@ class LDAPService:
                 'sn': user_data.get('secondname', ''),
                 'displayName': cn_name,
                 'mail': user_principal_name,
-                'pager': user_data.get('unique_id', ''),
+                'pager': self._normalize_pager(user_data.get('unique_id', '')),
                 'company': user_data.get('company', ''),
                 'department': user_data.get('department', ''),
                 'title': user_data.get('appointment', ''),
@@ -650,8 +656,9 @@ class LDAPService:
         try:
             conn = await self._get_connection()
             
-            # Поиск менеджера по pager
-            manager_filter = f"(pager={manager_id})"
+            # Поиск менеджера по pager - убираем решетку
+            normalized_manager_id = self._normalize_pager(manager_id)
+            manager_filter = f"(pager={normalized_manager_id})"
             conn.search(
                 'DC=central,DC=st-ing,DC=com',
                 manager_filter,
@@ -692,7 +699,8 @@ class LDAPService:
             conn = await self._get_connection()
             
             search_base = 'DC=central,DC=st-ing,DC=com'
-            search_filter = f"(&(" + "objectClass=user)(objectCategory=person)" + f"(pager={unique_id}))"
+            normalized_unique_id = self._normalize_pager(unique_id)
+            search_filter = f"(&(" + "objectClass=user)(objectCategory=person)" + f"(pager={normalized_unique_id}))"
             ldap_logger.info(f"LDAP поиск пользователя: base={search_base}, filter={search_filter}")
             conn.search(
                 search_base,
@@ -703,7 +711,7 @@ class LDAPService:
             ldap_logger.info(f"Найдено записей: {len(conn.entries)}")
             
             if not conn.entries:
-                return {"success": False, "stderr": f"Пользователь с pager {unique_id} не найден"}
+                return {"success": False, "stderr": f"Пользователь с pager {normalized_unique_id} не найден"}
             
             user = conn.entries[0]
             try:
@@ -887,7 +895,8 @@ class LDAPService:
             
             conn = await self._get_connection()
             
-            search_filter = f"(pager={pager})"
+            normalized_pager = self._normalize_pager(pager)
+            search_filter = f"(pager={normalized_pager})"
             conn.search(
                 'DC=central,DC=st-ing,DC=com',
                 search_filter,
@@ -924,8 +933,8 @@ class LDAPService:
             
             conn = await self._get_connection()
             
-
-            manager_filter = f"(pager={manager_id})"
+            normalized_manager_id = self._normalize_pager(manager_id)
+            manager_filter = f"(pager={normalized_manager_id})"
             conn.search(
                 'DC=central,DC=st-ing,DC=com',
                 manager_filter,
@@ -933,12 +942,13 @@ class LDAPService:
             )
             
             if not conn.entries:
-                return {"success": False, "stderr": f"Менеджер с pager {manager_id} не найден"}
+                return {"success": False, "stderr": f"Менеджер с pager {normalized_manager_id} не найден"}
             
             manager = conn.entries[0]
             manager_dn = manager.distinguishedName.value
             
-            employee_filter = f"(pager={employee_id})"
+            normalized_employee_id = self._normalize_pager(employee_id)
+            employee_filter = f"(pager={normalized_employee_id})"
             conn.search(
                 'DC=central,DC=st-ing,DC=com',
                 employee_filter,
@@ -946,7 +956,7 @@ class LDAPService:
             )
             
             if not conn.entries:
-                return {"success": False, "stderr": f"Сотрудник с pager {employee_id} не найден"}
+                return {"success": False, "stderr": f"Сотрудник с pager {normalized_employee_id} не найден"}
             
             employee = conn.entries[0]
 
@@ -976,7 +986,8 @@ class LDAPService:
 
             conn = await self._get_connection()
             
-            search_filter = f"(pager={unique_id})"
+            normalized_unique_id = self._normalize_pager(unique_id)
+            search_filter = f"(pager={normalized_unique_id})"
             conn.search(
                 'DC=central,DC=st-ing,DC=com',
                 search_filter,
@@ -1021,9 +1032,9 @@ class LDAPService:
             else:
                 # Доп. диагностика: альтернативные фильтры
                 alt_filters = [
-                    f'(pager={unique_id})',
-                    f'(&(objectClass=user)(pager={unique_id}))',
-                    f'(&(objectCategory=person)(pager={unique_id}))'
+                    f'(pager={normalized_unique_id})',
+                    f'(&(objectClass=user)(pager={normalized_unique_id}))',
+                    f'(&(objectCategory=person)(pager={normalized_unique_id}))'
                 ]
                 for af in alt_filters:
                     try:
@@ -1064,9 +1075,10 @@ class LDAPService:
             except Exception as e:
                 ldap_logger.warning(f"Ошибка отключения учетной записи: {e}")
 
-            # Перезаписываем pager на актуальный unique_id (как в PowerShell)
+            # Перезаписываем pager на актуальный unique_id (как в PowerShell) - убираем решетку
             try:
-                conn.modify(current_dn, {'pager': [(MODIFY_REPLACE, [unique_id])]})
+                normalized_unique_id = self._normalize_pager(unique_id)
+                conn.modify(current_dn, {'pager': [(MODIFY_REPLACE, [normalized_unique_id])]})
                 if conn.result.get('result') == 0:
                     ldap_logger.info("Атрибут pager синхронизирован с unique_id")
                 else:
@@ -1365,7 +1377,8 @@ class LDAPService:
             
             conn = await self._get_connection()
             
-            search_filter = f"(pager={pager})"
+            normalized_pager = self._normalize_pager(pager)
+            search_filter = f"(pager={normalized_pager})"
             conn.search(
                 'DC=central,DC=st-ing,DC=com',
                 search_filter,
@@ -1373,7 +1386,7 @@ class LDAPService:
             )
             
             if not conn.entries:
-                return {"success": False, "stderr": f"Пользователь с pager {pager} не найден"}
+                return {"success": False, "stderr": f"Пользователь с pager {normalized_pager} не найден"}
             
             user = conn.entries[0]
             sam_account_name = user.sAMAccountName.value
@@ -1454,12 +1467,13 @@ class LDAPService:
             
             conn = await self._get_connection()
             
-            # Находим пользователя по unique_id (pager)
-            search_filter = f"(pager={user_data.get('unique_id', '')})"
+            # Находим пользователя по unique_id (pager) - убираем решетку для поиска
+            normalized_pager = self._normalize_pager(user_data.get('unique_id', ''))
+            search_filter = f"(pager={normalized_pager})"
             conn.search('DC=central,DC=st-ing,DC=com', search_filter, attributes=['sAMAccountName', 'distinguishedName'])
             
             if not conn.entries:
-                error_msg = f"Пользователь с pager {user_data.get('unique_id')} не найден"
+                error_msg = f"Пользователь с pager {normalized_pager} не найден"
                 ldap_logger.error(f"❌ {error_msg}")
                 return {"success": False, "stderr": error_msg}
             
@@ -1471,9 +1485,9 @@ class LDAPService:
             # Обновляем атрибуты (как Set-ADUser в PS.ps1 строки 367-368)
             changes = {}
             
-            # pager
+            # pager - убираем решетку при установке в AD
             if user_data.get('unique_id'):
-                changes['pager'] = [(MODIFY_REPLACE, [str(user_data.get('unique_id', ''))])]
+                changes['pager'] = [(MODIFY_REPLACE, [normalized_pager])]
             
             # company
             if user_data.get('company'):

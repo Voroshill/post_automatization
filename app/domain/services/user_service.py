@@ -515,21 +515,20 @@ class UserService:
             ad_result = await self.ldap_service.update_user_in_ad(user_data)
             
             if not ad_result.get("success"):
-                app_logger.error(f"Ошибка обновления в AD: {ad_result.get('stderr')}")
-                # Откатываем изменения в БД? Или оставляем? Пока оставляем
-                return None
-            
-            sam_account_name = ad_result.get("sam_account_name")
-            app_logger.info(f"Пользователь {sam_account_name} обновлен в AD")
-            
-            # Обновляем группы (как в скриптах - Add-ADGroupMember)
-            await self.ldap_service._add_user_to_groups(sam_account_name, user_data)
-            app_logger.info(f"Группы пользователя {sam_account_name} обновлены")
-            
-            # Обновляем менеджера если изменился
-            if update_user.boss_id:
-                await self.ldap_service._assign_manager(sam_account_name, update_user.boss_id)
-                app_logger.info(f"Менеджер для пользователя {sam_account_name} обновлен")
+                app_logger.warning(f"Ошибка обновления в AD: {ad_result.get('stderr')}. Продолжаем выполнение, данные в БД обновлены.")
+                # Данные в БД уже обновлены, продолжаем выполнение
+            else:
+                sam_account_name = ad_result.get("sam_account_name")
+                app_logger.info(f"Пользователь {sam_account_name} обновлен в AD")
+                
+                # Обновляем группы (как в скриптах - Add-ADGroupMember)
+                await self.ldap_service._add_user_to_groups(sam_account_name, user_data)
+                app_logger.info(f"Группы пользователя {sam_account_name} обновлены")
+                
+                # Обновляем менеджера если изменился
+                if update_user.boss_id:
+                    await self.ldap_service._assign_manager(sam_account_name, update_user.boss_id)
+                    app_logger.info(f"Менеджер для пользователя {sam_account_name} обновлен")
             
             # Удаляем запись об обновлении
             await self.user_repository.delete_user(update_user_id)
