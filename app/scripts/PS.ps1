@@ -185,6 +185,10 @@ function Create
             {
                 $OU = "OU=Сметный отдел,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
             }
+            if ($department -like '*управления проект*')
+            {
+                $OU = "OU=Отдел управления проектами,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            }
             if ($department -like '*ланово*')
             {
                 $OU = "OU=Планово экономический отдел,OU=Финансовый департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
@@ -206,7 +210,7 @@ function Create
                 $OU = "OU=Административный отдел,OU=Департамент обеспечения,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
             }
         }
-        if ($obj_name -like '*емеров*' -or $obj_name -like '*амчатк*' -or $obj_name -like '*гнитогор*' -or $obj_name -like '*инько*' -or $obj_name -like '*ер К32*' -or $obj_name -like '*авидо*' -or $obj_name -like '*ктафар*' -or $obj_name -like '*ухарев*' -or $obj_name -like '*алент*' -or $obj_name -like '*рофлот*' -or $obj_name -like '*ON*')
+        if ($obj_name -like '*емеров*' -or $obj_name -like '*амчатк*' -or $obj_name -like '*гнитогор*' -or $obj_name -like '*завидов*' -or $obj_name -like '*эс2*' -or $obj_name -like '*сбер к32*' -or $obj_name -like '*инькофф*' -or $obj_name -like '*цод*')
         {
             $OU = "OU=" + $obj_name + ",OU=Строительные объекты,OU=Отдел управления проектами,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
         }
@@ -264,6 +268,10 @@ function Create
         if ($department -like '*метный*')
         {
             $group_otdel = "CN=Сметный отдел,OU=Сметный отдел,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+        }
+        if ($department -like '*управления проект*')
+        {
+            $group_otdel = "CN=Отдел управления проектами,OU=Отдел управления проектами,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
         }
         if ($department -like '*ланово*')
         {

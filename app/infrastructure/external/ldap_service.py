@@ -140,6 +140,8 @@ class LDAPService:
                 return "OU=Отдел ПТО,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
             elif 'метный' in department.lower():
                 return "OU=Сметный отдел,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
+            elif 'управления проект' in department.lower():
+                return "OU=Отдел управления проектами,OU=Технический департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
             elif 'планово' in department.lower():
                 return "OU=Планово экономический отдел,OU=Финансовый департамент,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
             elif 'ухгалтери' in department.lower():
@@ -152,7 +154,7 @@ class LDAPService:
                 return "OU=Административный отдел,OU=Департамент обеспечения,OU=СтройТехноИнженеринг,DC=central,DC=st-ing,DC=com"
         
         # Проверяем строительные объекты - используем полное название объекта
-        construction_objects = ['емеров', 'амчатк', 'гнитогор', 'инько', 'ер К32', 'авидо', 'ктафар', 'ухарев', 'алент', 'рофлот', 'ON']
+        construction_objects = ['емеров', 'амчатк', 'гнитогор', 'завидов', 'эс2', 'сбер к32', 'инькофф', 'цод']
         for obj in construction_objects:
             if obj in obj_name.lower():
                 # Точно как в PowerShell: создаем индивидуальную OU для каждого строительного объекта
